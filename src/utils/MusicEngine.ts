@@ -84,6 +84,14 @@ class MusicEngine {
   private ambientPadWorldId: 1 | 2 | 3 = 1
   private ambientSweepTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Ghost roll drone state
+  private ghostDroneOsc: OscillatorNode | null = null
+  private ghostDroneGain: GainNode | null = null
+  private ghostDroneActive = false
+
+  // Ghost note index (offset from player's noteIndex)
+  private ghostNoteOffset = 2
+
   private constructor() {
     // Private — use MusicEngine.get()
   }
@@ -638,6 +646,142 @@ class MusicEngine {
     return this.ambientPadWorldId
   }
 
+  // ---- GHOST MUSIC ----
+
+  /**
+   * Play a ghost-specific wall knock using sine wave (softer than player's triangle).
+   * Note is offset by +2 from the player's current cycle position.
+   * Lower volume (0.15-0.5) and longer decay (150ms-350ms) for ethereal quality.
+   *
+   * @param velocity — Impact velocity (affects volume and duration)
+   * @param worldId — Which world scale to use (1, 2, or 3)
+   */
+  playGhostKnock(velocity: number, worldId: 1 | 2 | 3): void {
+    if (!this.isEnabled()) return
+
+    const ctx = this.getCtx()
+    if (!ctx) return
+
+    const scale = WORLD_SCALES[worldId] ?? WORLD_SCALES[1]
+    // Offset note index: +2 from the player's current position
+    const ghostIdx = (this.noteIndex + this.ghostNoteOffset) % scale.length
+    const freq = scale[ghostIdx]
+
+    // Map velocity to volume (0.15 - 0.5) and duration (150ms - 350ms)
+    const clampedVel = Math.max(0, Math.min(10, velocity))
+    const normalizedVel = clampedVel / 10
+    const volume = 0.15 + normalizedVel * 0.35
+    const duration = 0.15 + normalizedVel * 0.20 // 150ms to 350ms
+
+    const sfxVolume = useGameStore.getState().settings.sfxVolume
+    const finalVolume = volume * sfxVolume
+
+    const now = ctx.currentTime
+
+    const osc = ctx.createOscillator()
+    osc.type = 'sine' // Sine for ethereal ghost tone (vs player's triangle)
+    osc.frequency.value = freq
+
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(finalVolume, now)
+    // Slower exponential decay for ghostly sustain
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration)
+
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(now)
+    osc.stop(now + duration + 0.01)
+  }
+
+  /**
+   * Start the ghost roll drone at the world root note * 1.5 (perfect fifth).
+   * Sine wave (softer than player's sawtooth).
+   * E.g., if player is C3 (130.81 Hz), ghost is G3 (196.22 Hz).
+   */
+  startGhostRoll(worldId: 1 | 2 | 3): void {
+    if (!this.isEnabled()) return
+    if (this.ghostDroneActive) return
+
+    const ctx = this.getCtx()
+    if (!ctx) return
+
+    const rootFreq = WORLD_ROOT_NOTES[worldId] ?? WORLD_ROOT_NOTES[1]
+    const ghostFreq = rootFreq * 1.5 // Perfect fifth
+    const now = ctx.currentTime
+
+    this.ghostDroneOsc = ctx.createOscillator()
+    this.ghostDroneOsc.type = 'sine' // Softer than player's sawtooth
+    this.ghostDroneOsc.frequency.value = ghostFreq
+
+    this.ghostDroneGain = ctx.createGain()
+    this.ghostDroneGain.gain.setValueAtTime(0.001, now)
+    // Fade in
+    this.ghostDroneGain.gain.setTargetAtTime(0.05 * this.musicVolume, now, 0.1)
+
+    this.ghostDroneOsc.connect(this.ghostDroneGain)
+    this.ghostDroneGain.connect(ctx.destination)
+    this.ghostDroneOsc.start(now)
+
+    this.ghostDroneActive = true
+  }
+
+  /**
+   * Update ghost drone volume based on ghost marble speed.
+   * Lower volume range than player (0.01 to 0.06).
+   * @param speed — Ghost marble speed (0-10)
+   */
+  updateGhostSpeed(speed: number): void {
+    if (!this.ghostDroneActive) return
+
+    const ctx = this.getCtx()
+    if (!ctx) return
+
+    const clamped = Math.max(0, Math.min(10, speed))
+    const normalized = clamped / 10
+
+    // Volume: 0.01 to 0.06 (quieter than player drone)
+    const volume = (0.01 + normalized * 0.05) * this.musicVolume
+    if (this.ghostDroneGain) {
+      this.ghostDroneGain.gain.setTargetAtTime(volume, ctx.currentTime, 0.05)
+    }
+  }
+
+  /** Stop the ghost roll drone */
+  stopGhostRoll(): void {
+    if (!this.ghostDroneActive) return
+
+    if (this.ghostDroneOsc) {
+      try { this.ghostDroneOsc.stop() } catch { /* already stopped */ }
+      this.ghostDroneOsc.disconnect()
+      this.ghostDroneOsc = null
+    }
+    if (this.ghostDroneGain) {
+      this.ghostDroneGain.disconnect()
+      this.ghostDroneGain = null
+    }
+    this.ghostDroneActive = false
+  }
+
+  /** Check if ghost drone is active */
+  isGhostDroneActive(): boolean {
+    return this.ghostDroneActive
+  }
+
+  /** Get the ghost note offset (for testing) */
+  getGhostNoteOffset(): number {
+    return this.ghostNoteOffset
+  }
+
+  /** Get the current note index (for testing ghost offset calculation) */
+  getNoteIndex(): number {
+    return this.noteIndex
+  }
+
+  /** Stop all ghost music layers */
+  stopAllGhostMusic(): void {
+    this.stopGhostRoll()
+  }
+
   // ---- CLEANUP ----
 
   /** Stop all zone music layers */
@@ -649,12 +793,13 @@ class MusicEngine {
   }
 
   /**
-   * Stop ALL music engine layers: zones + ambient pad.
+   * Stop ALL music engine layers: zones + ambient pad + ghost music.
    * Used when toggling musicMode off to ensure no dangling oscillators.
    */
   stopAllMusicLayers(): void {
     this.stopAllZones()
     this.stopAmbientPad()
+    this.stopAllGhostMusic()
   }
 
   /** Reset singleton for testing */
