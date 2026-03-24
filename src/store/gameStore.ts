@@ -78,6 +78,8 @@ export interface GameState {
   updateTimer: (dt: number) => void
   startTimer: () => void
   setGameMode: (mode: GameMode) => void
+  setCurrentWorld: (world: number) => void
+  saveDailyResult: (dateKey: string, result: DailyResult) => void
   loadSavedProgress: () => void
   saveProgress: () => void
 }
@@ -177,8 +179,10 @@ export const useGameStore = create<GameState>((set, get) => {
     completeLevel: (time: number, starThresholds: [number, number, number]) => {
       set({ gameStatus: GameStatus.Complete })
 
-      // Save progress
       const state = get()
+      // Only save campaign progress for campaign mode levels (id >= 1 and world >= 1)
+      if (state.gameMode !== GameMode.Campaign) return
+
       const levelKey = String(state.currentLevel)
       const existing = state.campaignProgress.levels[levelKey]
       const allGems = state.gemsCollected.every(Boolean)
@@ -233,6 +237,20 @@ export const useGameStore = create<GameState>((set, get) => {
 
     setGameMode: (mode: GameMode) => {
       set({ gameMode: mode })
+    },
+
+    setCurrentWorld: (world: number) => {
+      set({ currentWorld: world })
+    },
+
+    saveDailyResult: (dateKey: string, result: DailyResult) => {
+      const state = get()
+      const updatedResults = {
+        ...state.dailyResults,
+        [dateKey]: result,
+      }
+      set({ dailyResults: updatedResults })
+      get().saveProgress()
     },
 
     loadSavedProgress: () => {
