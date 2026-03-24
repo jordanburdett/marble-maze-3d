@@ -14,6 +14,8 @@ import { ConnectedParticleSystem } from './Particles'
 import { MarbleTrail } from './MarbleTrail'
 import { emitGemCollect, emitGoalFountain } from '../utils/particleState'
 import { trailPositions } from '../utils/trailState'
+import { trajectoryRecorder } from '../utils/trajectoryRecorder'
+import { ghostStorage } from '../utils/ghostStorage'
 import { cameraState, CameraPhase } from '../utils/cameraState'
 import { useInput } from '../hooks/useInput'
 import { useAudio, useAudioEvents } from '../hooks/useAudio'
@@ -219,9 +221,11 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
-  // Reset trail, camera, and music on level reset
+  // Reset trail, camera, music, and trajectory recording on level reset
   useEffect(() => {
     trailPositions.reset()
+    trajectoryRecorder.clear()
+    trajectoryRecorder.startRecording()
     cameraState.resetForLevel()
     const music = MusicEngine.get()
     music.resetNoteIndex()
@@ -229,9 +233,11 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     wallGlowState.reset()
   }, [resetTrigger])
 
-  // Reset camera on initial mount / level change
+  // Reset camera and start recording on initial mount / level change
   useEffect(() => {
     cameraState.resetForLevel()
+    trajectoryRecorder.clear()
+    trajectoryRecorder.startRecording()
   }, [level.id])
 
   const handleStartMoving = useCallback(() => {
@@ -244,6 +250,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     audio.stopRoll()
     MusicEngine.get().stopAllZones()
     cameraState.setPhase(CameraPhase.TrapZoom)
+    trajectoryRecorder.clear()
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
       failTimeoutRef.current = null
@@ -257,6 +264,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     audio.stopRoll()
     MusicEngine.get().stopAllZones()
     cameraState.setPhase(CameraPhase.TrapZoom)
+    trajectoryRecorder.clear()
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
       failTimeoutRef.current = null
@@ -270,8 +278,19 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     MusicEngine.get().stopAllZones()
     cameraState.setPhase(CameraPhase.Victory)
     emitGoalFountain(level.goalPosition[0], 0.5, level.goalPosition[1])
+
+    // Save ghost trajectory if ghostEnabled and recording
+    trajectoryRecorder.stopRecording()
+    const state = useGameStore.getState()
+    if (state.settings.ghostEnabled) {
+      const trajectory = trajectoryRecorder.getTrajectory()
+      if (trajectory.length > 0) {
+        ghostStorage.saveGhost(level.id, trajectory, state.timer)
+      }
+    }
+
     onLevelComplete()
-  }, [onLevelComplete, audio, level.goalPosition])
+  }, [onLevelComplete, audio, level.goalPosition, level.id])
 
   const handleGemCollect = useCallback((index: number) => {
     collectGem(index)

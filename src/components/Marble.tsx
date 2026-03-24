@@ -6,7 +6,9 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import type { WindZoneDef, IcePatchDef, RotatingSegmentDef } from '../data/levels'
 import { trailPositions } from '../utils/trailState'
+import { trajectoryRecorder } from '../utils/trajectoryRecorder'
 import { cameraState, CameraPhase } from '../utils/cameraState'
+import { useGameStore, GameStatus } from '../store/gameStore'
 import { prefersReducedMotion } from '../hooks/useReducedMotion'
 
 const MARBLE_RADIUS = 0.2
@@ -144,6 +146,11 @@ export function Marble({
 
     // --- Trail position update ---
     trailPositions.update(pos.x, pos.y, pos.z)
+
+    // --- Ghost trajectory recording ---
+    if (useGameStore.getState().gameStatus === GameStatus.Playing) {
+      trajectoryRecorder.recordFrame(pos.x, pos.y, pos.z, speed, useGameStore.getState().timer)
+    }
 
     // --- Zone detection with enter/leave callbacks ---
 
