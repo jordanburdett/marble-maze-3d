@@ -4,6 +4,8 @@ import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import * as THREE from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import type { Level } from '../data/levels'
+import { wallGlowState, WORLD_GLOW_COLORS } from '../utils/wallGlowState'
+import { prefersReducedMotion } from '../hooks/useReducedMotion'
 
 const FLOOR_THICKNESS = 0.1
 const DEFAULT_WALL_HEIGHT = 0.4
@@ -53,6 +55,8 @@ function wallToBox(
 export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
   const boardRef = useRef<RapierRigidBody>(null)
   const goalRingRef = useRef<THREE.Mesh>(null)
+  const wallMeshRef = useRef<THREE.InstancedMesh>(null)
+  const wallMaterialRef = useRef<THREE.MeshStandardMaterial>(null)
 
   const wallHeight = level.wallHeight ?? DEFAULT_WALL_HEIGHT
   const wallThickness = level.wallThickness ?? DEFAULT_WALL_THICKNESS
@@ -79,10 +83,27 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
     return matrices
   }, [wallBoxes])
 
-  // Animate goal ring pulse
+  // Reusable color for glow blending
+  const glowColor = useRef(new THREE.Color())
+
+  // Animate goal ring pulse + wall glow
   useFrame((_state, delta) => {
     if (goalRingRef.current) {
       goalRingRef.current.rotation.y += delta * 0.5
+    }
+
+    // Wall emissive glow update
+    const material = wallMaterialRef.current
+    if (!material) return
+
+    const intensity = wallGlowState.update()
+    if (intensity > 0 && !prefersReducedMotion()) {
+      const worldColors = WORLD_GLOW_COLORS[wallGlowState.worldId] ?? WORLD_GLOW_COLORS[1]
+      glowColor.current.setRGB(worldColors[0], worldColors[1], worldColors[2])
+      material.emissive.copy(glowColor.current)
+      material.emissiveIntensity = intensity * 0.8
+    } else {
+      material.emissiveIntensity = 0
     }
   })
 
@@ -129,6 +150,7 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
         <instancedMesh
           args={[undefined, undefined, wallMatrices.length]}
           ref={(mesh) => {
+            wallMeshRef.current = mesh
             if (mesh) {
               wallMatrices.forEach((m, i) => mesh.setMatrixAt(i, m))
               mesh.instanceMatrix.needsUpdate = true
@@ -137,7 +159,14 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
           frustumCulled={false}
         >
           <boxGeometry args={[1, 1, 1]} />
-          <meshStandardMaterial color="#C4883C" roughness={0.6} metalness={0.1} />
+          <meshStandardMaterial
+            ref={wallMaterialRef}
+            color="#C4883C"
+            roughness={0.6}
+            metalness={0.1}
+            emissive="#000000"
+            emissiveIntensity={0}
+          />
         </instancedMesh>
       )}
 
