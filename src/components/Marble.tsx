@@ -6,6 +6,8 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import type { WindZoneDef, IcePatchDef } from '../data/levels'
 import { trailPositions } from '../utils/trailState'
+import { cameraState, CameraPhase } from '../utils/cameraState'
+import { prefersReducedMotion } from '../hooks/useReducedMotion'
 
 const MARBLE_RADIUS = 0.2
 const VELOCITY_THRESHOLD = 0.05 // minimum velocity to start timer
@@ -143,15 +145,47 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
       body.setLinearDamping(onIce ? ICE_DAMPING : NORMAL_DAMPING)
     }
 
-    // Camera follows marble with smooth lerp
+    // --- Camera transition logic ---
+    cameraState.tick(delta)
+
+    // Auto-transition from overview to gameplay after duration
+    if (cameraState.phase === CameraPhase.Overview && cameraState.phaseTime >= cameraState.overviewDuration) {
+      cameraState.setPhase(CameraPhase.Gameplay)
+    }
+
+    // Camera target follows marble
     tempMarbleXZ.current.set(pos.x, 0, pos.z)
     cameraTarget.current.lerp(tempMarbleXZ.current, CAMERA_LERP * delta)
 
     const cam = state.camera
+
+    // Determine camera position based on phase
+    let camY = cameraState.gameplayY
+    let camZ = cameraState.gameplayZ
+
+    const reducedMotionActive = prefersReducedMotion()
+
+    if (cameraState.phase === CameraPhase.Overview && !reducedMotionActive) {
+      const t = Math.min(cameraState.phaseTime / cameraState.overviewDuration, 1)
+      const eased = t * t * (3 - 2 * t) // smoothstep
+      camY = cameraState.overviewY + (cameraState.gameplayY - cameraState.overviewY) * eased
+      camZ = cameraState.overviewZ + (cameraState.gameplayZ - cameraState.overviewZ) * eased
+    } else if (cameraState.phase === CameraPhase.TrapZoom && !reducedMotionActive) {
+      const t = Math.min(cameraState.phaseTime / 1.0, 1)
+      const eased = t * t
+      camY = cameraState.gameplayY + (4 - cameraState.gameplayY) * eased
+      camZ = cameraState.gameplayZ + (2 - cameraState.gameplayZ) * eased
+    } else if (cameraState.phase === CameraPhase.Victory && !reducedMotionActive) {
+      const t = Math.min(cameraState.phaseTime / 0.8, 1)
+      const eased = t * t * (3 - 2 * t)
+      camY = cameraState.gameplayY + (cameraState.victoryY - cameraState.gameplayY) * eased
+      camZ = cameraState.gameplayZ + (cameraState.victoryZ - cameraState.gameplayZ) * eased
+    }
+
     tempCamPos.current.set(
       cameraTarget.current.x,
-      8,
-      cameraTarget.current.z + 6,
+      camY,
+      cameraTarget.current.z + camZ,
     )
     cam.position.lerp(tempCamPos.current, CAMERA_LERP * delta)
     cam.lookAt(cameraTarget.current.x, 0, cameraTarget.current.z)

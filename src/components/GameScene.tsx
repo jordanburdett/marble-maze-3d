@@ -14,6 +14,7 @@ import { ConnectedParticleSystem } from './Particles'
 import { MarbleTrail } from './MarbleTrail'
 import { emitGemCollect, emitGoalFountain } from '../utils/particleState'
 import { trailPositions } from '../utils/trailState'
+import { cameraState, CameraPhase } from '../utils/cameraState'
 import { useInput } from '../hooks/useInput'
 import { useAudio, useAudioEvents } from '../hooks/useAudio'
 import { useGameStore, GameStatus } from '../store/gameStore'
@@ -139,10 +140,16 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
-  // Reset trail on level reset
+  // Reset trail and camera on level reset
   useEffect(() => {
     trailPositions.reset()
+    cameraState.resetForLevel()
   }, [resetTrigger])
+
+  // Reset camera on initial mount / level change
+  useEffect(() => {
+    cameraState.resetForLevel()
+  }, [level.id])
 
   const handleStartMoving = useCallback(() => {
     startTimer()
@@ -152,6 +159,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     if (failTimeoutRef.current) return
     audio.playTrapFall()
     audio.stopRoll()
+    cameraState.setPhase(CameraPhase.TrapZoom)
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
       failTimeoutRef.current = null
@@ -163,6 +171,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     if (failTimeoutRef.current) return
     audio.playTrapFall()
     audio.stopRoll()
+    cameraState.setPhase(CameraPhase.TrapZoom)
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
       failTimeoutRef.current = null
@@ -173,6 +182,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   const handleGoalReach = useCallback(() => {
     audio.playGoalReached()
     audio.stopRoll()
+    cameraState.setPhase(CameraPhase.Victory)
     emitGoalFountain(level.goalPosition[0], 0.5, level.goalPosition[1])
     onLevelComplete()
   }, [onLevelComplete, audio, level.goalPosition])

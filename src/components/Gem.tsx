@@ -1,8 +1,9 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody } from '@react-three/rapier'
 import type { Mesh } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
+import { prefersReducedMotion } from '../hooks/useReducedMotion'
 
 const GEM_COLORS = ['#50C878', '#2E5090', '#E0115F'] as const // emerald, sapphire, ruby
 const GEM_FLOAT_HEIGHT = 0.6
@@ -27,8 +28,9 @@ export function Gem({ position, index, collected, onCollect }: GemProps) {
     }
   }, [collected])
 
+  const reducedMotionActive = useMemo(() => prefersReducedMotion(), [])
   useFrame((_state, delta) => {
-    if (collected || collectedRef.current || !meshRef.current) return
+    if (collected || collectedRef.current || !meshRef.current || reducedMotionActive) return
     meshRef.current.rotation.y += GEM_ROTATION_SPEED * delta
   })
 

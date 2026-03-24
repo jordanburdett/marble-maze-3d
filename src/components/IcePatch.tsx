@@ -2,6 +2,7 @@ import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { IcePatchDef } from '../data/levels'
+import { prefersReducedMotion } from '../hooks/useReducedMotion'
 
 const ICE_COLOR = '#88DDFF'
 const SHIMMER_SPEED = 2.0
@@ -20,9 +21,10 @@ export function IcePatch({ def }: IcePatchProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const opacityRef = useRef(0.4)
 
-  // Shimmer animation: oscillate opacity
+  // Shimmer animation: oscillate opacity (skip when reduced motion)
+  const reducedMotionActive = useMemo(() => prefersReducedMotion(), [])
   useFrame((state) => {
-    if (!meshRef.current) return
+    if (!meshRef.current || reducedMotionActive) return
     opacityRef.current = 0.3 + 0.15 * Math.sin(state.clock.elapsedTime * 3 * SHIMMER_SPEED)
     const mat = meshRef.current.material as THREE.MeshBasicMaterial
     mat.opacity = opacityRef.current

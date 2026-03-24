@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { joystickInputRef } from '../utils/inputRefs'
+import { joystickInputRef, tiltInputRef } from '../utils/inputRefs'
 
 const MAX_TILT_ANGLE = (12 * Math.PI) / 180 // 12 degrees in radians
 const TILT_RATE = 3.0 // radians per second toward max
@@ -157,6 +157,13 @@ export function useInput(enabled: boolean) {
     if (joystickInputRef.active) {
       targetX = -joystickInputRef.y // Joystick Y -> board X tilt (inverted)
       targetZ = joystickInputRef.x  // Joystick X -> board Z tilt
+    }
+
+    // Device tilt overrides all if active (already in radians from useTiltControls)
+    if (tiltInputRef.active) {
+      tilt.tiltX = tiltInputRef.tiltX
+      tilt.tiltZ = tiltInputRef.tiltZ
+      return
     }
 
     // Scale to max angle

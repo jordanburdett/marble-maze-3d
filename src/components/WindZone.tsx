@@ -2,6 +2,7 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { WindZoneDef } from '../data/levels'
+import { prefersReducedMotion } from '../hooks/useReducedMotion'
 
 const ARROW_COLOR = '#AADDFF'
 const ARROW_SPEED = 2.0
@@ -24,9 +25,10 @@ export function WindZone({ def }: WindZoneProps) {
     return Math.atan2(def.direction[0], def.direction[1])
   }, [def.direction])
 
-  // Animate arrow opacity for "flowing" effect
+  // Animate arrow opacity for "flowing" effect (skip when reduced motion)
+  const reducedMotionActive = useMemo(() => prefersReducedMotion(), [])
   useFrame((state) => {
-    if (!arrowsRef.current) return
+    if (!arrowsRef.current || reducedMotionActive) return
     const t = state.clock.elapsedTime * ARROW_SPEED
     arrowsRef.current.children.forEach((child, i) => {
       const mesh = child as THREE.Mesh

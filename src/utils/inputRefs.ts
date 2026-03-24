@@ -10,3 +10,10 @@ export const joystickInputRef = {
   y: 0,
   active: false,
 }
+
+/** Device tilt input state — written by useTiltControls, read by useInput */
+export const tiltInputRef = {
+  tiltX: 0,
+  tiltZ: 0,
+  active: false,
+}

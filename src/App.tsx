@@ -12,6 +12,7 @@ import { CampaignMap } from './components/CampaignMap'
 import { DailyResult } from './components/DailyResult'
 import { SettingsScreen } from './components/SettingsScreen'
 import { VirtualJoystick } from './components/VirtualJoystick'
+import { TiltController } from './components/TiltController'
 import { useGameStore, GameMode, GameStatus, ControlMode } from './store/gameStore'
 import { getLevel, ALL_LEVELS } from './data/levels'
 import {
@@ -323,6 +324,11 @@ export default function App() {
           onMove={handleJoystickMove}
           onRelease={handleJoystickRelease}
         />
+      )}
+
+      {/* Tilt controls for mobile */}
+      {mobile && controlMode === ControlMode.Tilt && (
+        <TiltController enabled={gameStatus === GameStatus.Playing} />
       )}
 
       {gameStatus === GameStatus.Paused && (

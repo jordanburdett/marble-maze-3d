@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { tiltInputRef } from '../utils/inputRefs'
 
 const MAX_TILT_DEGREES = 20
 
@@ -75,11 +76,19 @@ export function useTiltControls(enabled: boolean) {
       const MAX_TILT_ANGLE = (12 * Math.PI) / 180
       tiltRef.current.tiltX = normalizedX * MAX_TILT_ANGLE
       tiltRef.current.tiltZ = normalizedZ * MAX_TILT_ANGLE
+
+      // Also write to shared ref so useInput can read it
+      tiltInputRef.tiltX = normalizedX * MAX_TILT_ANGLE
+      tiltInputRef.tiltZ = normalizedZ * MAX_TILT_ANGLE
+      tiltInputRef.active = true
     }
 
     window.addEventListener('deviceorientation', handleOrientation)
     return () => {
       window.removeEventListener('deviceorientation', handleOrientation)
+      tiltInputRef.active = false
+      tiltInputRef.tiltX = 0
+      tiltInputRef.tiltZ = 0
     }
   }, [enabled, permissionGranted])
 

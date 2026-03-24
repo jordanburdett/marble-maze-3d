@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { useGameStore, calculateStars, GameMode } from '../store/gameStore'
 import type { Level } from '../data/levels'
 import { TOTAL_LEVEL_COUNT, ALL_LEVELS } from '../data/levels'
+import { useReducedMotion } from '../hooks/useReducedMotion'
 
 const GEM_LABELS = ['Emerald', 'Sapphire', 'Ruby'] as const
 const GEM_COLORS = ['#50C878', '#2E5090', '#E0115F'] as const
@@ -148,6 +150,25 @@ interface CompleteProps {
   onMenu: () => void
 }
 
+/** Inject star-pop keyframes once */
+const STAR_KEYFRAMES_ID = 'mm3d-star-pop'
+function ensureStarKeyframes() {
+  if (typeof document === 'undefined') return
+  if (document.getElementById(STAR_KEYFRAMES_ID)) return
+  const style = document.createElement('style')
+  style.id = STAR_KEYFRAMES_ID
+  style.textContent = `
+    @keyframes mm3d-star-pop {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.4); opacity: 1; }
+      70% { transform: scale(0.85); }
+      85% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  `
+  document.head.appendChild(style)
+}
+
 export function LevelCompleteOverlay({ level, onNextLevel, onRestart, onMenu }: CompleteProps) {
   const timer = useGameStore(s => s.timer)
   const gemsCollected = useGameStore(s => s.gemsCollected)
@@ -156,23 +177,40 @@ export function LevelCompleteOverlay({ level, onNextLevel, onRestart, onMenu }: 
   const gemCount = gemsCollected.filter(Boolean).length
   const stars = calculateStars(timer, level.starThresholds, allGems)
   const hasNextLevel = gameMode === GameMode.Campaign && ALL_LEVELS.some(l => l.id === level.id + 1)
+  const skipAnimation = useReducedMotion()
+
+  // Inject keyframes on mount
+  useEffect(() => {
+    ensureStarKeyframes()
+  }, [])
 
   return (
     <div style={overlayStyle} role="dialog" aria-label="Level complete">
       <div style={overlayCardStyle}>
         <h2 style={overlayTitleStyle}>Level Complete!</h2>
         <div style={starsRowStyle}>
-          {[1, 2, 3].map(s => (
-            <span
-              key={s}
-              style={{
-                ...starStyle,
-                color: s <= stars ? '#FFD700' : '#555',
-              }}
-            >
-              {'\u2605'}
-            </span>
-          ))}
+          {[1, 2, 3].map(s => {
+            const earned = s <= stars
+            const animStyle: React.CSSProperties = earned && !skipAnimation
+              ? {
+                  animation: `mm3d-star-pop 0.4s ease-out ${s * 0.2}s both`,
+                }
+              : {}
+
+            return (
+              <span
+                key={s}
+                style={{
+                  ...starStyle,
+                  color: earned ? '#FFD700' : '#555',
+                  display: 'inline-block',
+                  ...animStyle,
+                }}
+              >
+                {'\u2605'}
+              </span>
+            )
+          })}
         </div>
         <p style={statStyle}>Time: {formatTime(timer)}</p>
         <p style={statStyle}>Gems: {gemCount}/3 {allGems ? '- Perfect!' : ''}</p>
