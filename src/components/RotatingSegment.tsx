@@ -7,6 +7,7 @@ import type { RotatingSegmentDef } from '../data/levels'
 
 const SPOKE_HEIGHT = 0.3
 const SPOKE_WIDTH = 0.12
+const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
 interface RotatingSegmentProps {
   def: RotatingSegmentDef
@@ -27,10 +28,7 @@ export function RotatingSegment({ def, enabled }: RotatingSegmentProps) {
     if (!bodyRef.current || !enabled) return
 
     angleRef.current += def.speed * delta
-    quatRef.current.setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      angleRef.current,
-    )
+    quatRef.current.setFromAxisAngle(Y_AXIS, angleRef.current)
 
     const q = quatRef.current
     bodyRef.current.setNextKinematicRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
