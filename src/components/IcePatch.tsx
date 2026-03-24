@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { IcePatchDef } from '../data/levels'
@@ -21,9 +21,9 @@ export function IcePatch({ def }: IcePatchProps) {
   const opacityRef = useRef(0.4)
 
   // Shimmer animation: oscillate opacity
-  useFrame(() => {
+  useFrame((state) => {
     if (!meshRef.current) return
-    opacityRef.current = 0.3 + 0.15 * Math.sin(Date.now() * 0.003 * SHIMMER_SPEED)
+    opacityRef.current = 0.3 + 0.15 * Math.sin(state.clock.elapsedTime * 3 * SHIMMER_SPEED)
     const mat = meshRef.current.material as THREE.MeshBasicMaterial
     mat.opacity = opacityRef.current
   })
@@ -57,6 +57,13 @@ export function IcePatch({ def }: IcePatchProps) {
     texture.repeat.set(def.size[0], def.size[1])
     return texture
   }, [def.size])
+
+  // Dispose GPU texture on unmount
+  useEffect(() => {
+    return () => {
+      shimmerTexture.dispose()
+    }
+  }, [shimmerTexture])
 
   return (
     <group position={[def.position[0], 0.008, def.position[1]]}>
