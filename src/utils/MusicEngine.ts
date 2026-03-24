@@ -34,6 +34,16 @@ export const ICE_PAD_CHORDS: Record<1 | 2 | 3, readonly [number, number, number]
   3: [220.00, 261.63, 329.63] as const, // A3, C4, E4
 }
 
+// World-specific ambient pad chords (4-note 7th chords, one octave lower)
+// W1: Cmaj7 (C-E-G-B) — warm
+// W2: Dm7 (D-F-A-C) — melancholic, icy
+// W3: Am7 (A-C-E-G) — mysterious, ethereal
+export const AMBIENT_CHORDS: Record<1 | 2 | 3, readonly [number, number, number, number]> = {
+  1: [130.81, 164.81, 196.00, 246.94] as const, // C3, E3, G3, B3 (Cmaj7)
+  2: [146.83, 174.61, 220.00, 261.63] as const, // D3, F3, A3, C4 (Dm7)
+  3: [110.00, 130.81, 164.81, 196.00] as const, // A2, C3, E3, G3 (Am7)
+}
+
 /** Map a marble speed (0-10) to BPM (60-180) linearly */
 export function speedToBPM(speed: number): number {
   const clamped = Math.max(0, Math.min(10, speed))
@@ -65,6 +75,14 @@ class MusicEngine {
   // Rotating rhythm state
   private rotatingTimer: ReturnType<typeof setInterval> | null = null
   private rotatingActive = false
+
+  // World-specific ambient pad state
+  private ambientPadOscs: OscillatorNode[] = []
+  private ambientPadGain: GainNode | null = null
+  private ambientPadFilter: BiquadFilterNode | null = null
+  private ambientPadActive = false
+  private ambientPadWorldId: 1 | 2 | 3 = 1
+  private ambientSweepTimer: ReturnType<typeof setTimeout> | null = null
 
   private constructor() {
     // Private — use MusicEngine.get()
@@ -466,6 +484,160 @@ class MusicEngine {
     return this.rotatingActive
   }
 
+  // ---- WORLD-SPECIFIC AMBIENT PAD ----
+
+  /**
+   * Start a world-specific ambient pad chord.
+   * W1: Cmaj7, W2: Dm7, W3: Am7
+   * If a pad for a different world is already playing, crossfade over 500ms.
+   */
+  startAmbientPad(worldId: 1 | 2 | 3): void {
+    if (!this.isEnabled()) return
+
+    // If already playing the same world's pad, do nothing
+    if (this.ambientPadActive && this.ambientPadWorldId === worldId) return
+
+    // If playing a different world's pad, crossfade
+    if (this.ambientPadActive && this.ambientPadWorldId !== worldId) {
+      this.crossfadeAmbientPad(worldId)
+      return
+    }
+
+    const ctx = this.getCtx()
+    if (!ctx) return
+
+    this.createAmbientPad(ctx, worldId)
+  }
+
+  /** Create new ambient pad oscillators for the given world */
+  private createAmbientPad(ctx: AudioContext, worldId: 1 | 2 | 3): void {
+    const chord = AMBIENT_CHORDS[worldId] ?? AMBIENT_CHORDS[1]
+    const now = ctx.currentTime
+
+    this.ambientPadFilter = ctx.createBiquadFilter()
+    this.ambientPadFilter.type = 'lowpass'
+    this.ambientPadFilter.frequency.value = 400
+    this.ambientPadFilter.Q.value = 0.5
+
+    this.ambientPadGain = ctx.createGain()
+    this.ambientPadGain.gain.setValueAtTime(0.001, now)
+    // Fade in over ~2 seconds
+    this.ambientPadGain.gain.setTargetAtTime(0.06 * this.musicVolume, now, 2.0)
+
+    this.ambientPadFilter.connect(this.ambientPadGain)
+    this.ambientPadGain.connect(ctx.destination)
+
+    this.ambientPadOscs = chord.map(freq => {
+      const osc = ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      // Slight detune for warmth
+      osc.detune.value = (Math.random() - 0.5) * 6
+      osc.connect(this.ambientPadFilter!)
+      osc.start(now)
+      return osc
+    })
+
+    this.ambientPadActive = true
+    this.ambientPadWorldId = worldId
+
+    // Start filter sweep cycle
+    this.sweepAmbientPadFilter()
+  }
+
+  /** Crossfade from current ambient pad to a new world's chord over 500ms */
+  private crossfadeAmbientPad(newWorldId: 1 | 2 | 3): void {
+    const ctx = this.getCtx()
+    if (!ctx) return
+
+    const now = ctx.currentTime
+
+    // Fade out old pad
+    if (this.ambientPadGain) {
+      this.ambientPadGain.gain.setTargetAtTime(0.001, now, 0.15)
+    }
+
+    // Clear old sweep timer
+    if (this.ambientSweepTimer !== null) {
+      clearTimeout(this.ambientSweepTimer)
+      this.ambientSweepTimer = null
+    }
+
+    // Schedule cleanup of old oscillators after fade-out
+    const oldOscs = [...this.ambientPadOscs]
+    const oldGain = this.ambientPadGain
+    const oldFilter = this.ambientPadFilter
+
+    setTimeout(() => {
+      oldOscs.forEach(osc => {
+        try { osc.stop() } catch { /* already stopped */ }
+        osc.disconnect()
+      })
+      if (oldFilter) oldFilter.disconnect()
+      if (oldGain) oldGain.disconnect()
+    }, 600)
+
+    // Clear refs before creating new pad
+    this.ambientPadOscs = []
+    this.ambientPadGain = null
+    this.ambientPadFilter = null
+    this.ambientPadActive = false
+
+    // Create new pad
+    this.createAmbientPad(ctx, newWorldId)
+  }
+
+  /** Slow filter sweep for ambient pad */
+  private sweepAmbientPadFilter(): void {
+    const ctx = this.getCtx()
+    if (!ctx || !this.ambientPadFilter || !this.ambientPadActive) return
+
+    const now = ctx.currentTime
+    const cycleDuration = 8
+
+    this.ambientPadFilter.frequency.setValueAtTime(300, now)
+    this.ambientPadFilter.frequency.linearRampToValueAtTime(800, now + cycleDuration / 2)
+    this.ambientPadFilter.frequency.linearRampToValueAtTime(300, now + cycleDuration)
+
+    this.ambientSweepTimer = setTimeout(() => this.sweepAmbientPadFilter(), cycleDuration * 1000)
+  }
+
+  /** Stop the world-specific ambient pad */
+  stopAmbientPad(): void {
+    if (!this.ambientPadActive) return
+
+    if (this.ambientSweepTimer !== null) {
+      clearTimeout(this.ambientSweepTimer)
+      this.ambientSweepTimer = null
+    }
+
+    this.ambientPadOscs.forEach(osc => {
+      try { osc.stop() } catch { /* already stopped */ }
+      osc.disconnect()
+    })
+    this.ambientPadOscs = []
+
+    if (this.ambientPadFilter) {
+      this.ambientPadFilter.disconnect()
+      this.ambientPadFilter = null
+    }
+    if (this.ambientPadGain) {
+      this.ambientPadGain.disconnect()
+      this.ambientPadGain = null
+    }
+    this.ambientPadActive = false
+  }
+
+  /** Check if ambient pad is active */
+  isAmbientPadActive(): boolean {
+    return this.ambientPadActive
+  }
+
+  /** Get current ambient pad world ID (for testing) */
+  getAmbientPadWorldId(): 1 | 2 | 3 {
+    return this.ambientPadWorldId
+  }
+
   // ---- CLEANUP ----
 
   /** Stop all zone music layers */
@@ -476,10 +648,19 @@ class MusicEngine {
     this.stopRotatingRhythm()
   }
 
+  /**
+   * Stop ALL music engine layers: zones + ambient pad.
+   * Used when toggling musicMode off to ensure no dangling oscillators.
+   */
+  stopAllMusicLayers(): void {
+    this.stopAllZones()
+    this.stopAmbientPad()
+  }
+
   /** Reset singleton for testing */
   static _resetForTest(): void {
     if (MusicEngine.instance) {
-      MusicEngine.instance.stopAllZones()
+      MusicEngine.instance.stopAllMusicLayers()
     }
     MusicEngine.instance = null
   }
