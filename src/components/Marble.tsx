@@ -4,19 +4,36 @@ import { RigidBody } from '@react-three/rapier'
 import { Environment } from '@react-three/drei'
 import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
+import type { WindZoneDef, IcePatchDef } from '../data/levels'
 
 const MARBLE_RADIUS = 0.2
 const VELOCITY_THRESHOLD = 0.05 // minimum velocity to start timer
 const CAMERA_LERP = 3.0
+const NORMAL_DAMPING = 0.5
+const ICE_DAMPING = 0.05
 
 interface MarbleProps {
   startPosition: [number, number]
   onFallOff: () => void
   onStartMoving: () => void
   resetTrigger: number
+  windZones?: WindZoneDef[]
+  icePatches?: IcePatchDef[]
 }
 
-export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger }: MarbleProps) {
+/** Check if a point [x,z] is inside a rectangular zone */
+function isInsideRect(
+  px: number, pz: number,
+  cx: number, cz: number,
+  hw: number, hd: number,
+): boolean {
+  return (
+    px >= cx - hw && px <= cx + hw &&
+    pz >= cz - hd && pz <= cz + hd
+  )
+}
+
+export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, windZones, icePatches }: MarbleProps) {
   const bodyRef = useRef<RapierRigidBody>(null)
   const hasStartedMoving = useRef(false)
   const hasFallenOff = useRef(false)
@@ -61,6 +78,38 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger }
     if (!hasStartedMoving.current && speed > VELOCITY_THRESHOLD) {
       hasStartedMoving.current = true
       onStartMoving()
+    }
+
+    // Apply wind zone forces
+    if (windZones) {
+      for (const wz of windZones) {
+        const hw = wz.size[0] / 2
+        const hd = wz.size[1] / 2
+        if (isInsideRect(pos.x, pos.z, wz.position[0], wz.position[1], hw, hd)) {
+          body.applyImpulse(
+            {
+              x: wz.direction[0] * wz.strength * delta,
+              y: 0,
+              z: wz.direction[1] * wz.strength * delta,
+            },
+            true,
+          )
+        }
+      }
+    }
+
+    // Adjust damping for ice patches
+    if (icePatches) {
+      let onIce = false
+      for (const ip of icePatches) {
+        const hw = ip.size[0] / 2
+        const hd = ip.size[1] / 2
+        if (isInsideRect(pos.x, pos.z, ip.position[0], ip.position[1], hw, hd)) {
+          onIce = true
+          break
+        }
+      }
+      body.setLinearDamping(onIce ? ICE_DAMPING : NORMAL_DAMPING)
     }
 
     // Camera follows marble with smooth lerp

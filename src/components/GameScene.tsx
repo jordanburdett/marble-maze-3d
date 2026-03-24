@@ -6,19 +6,23 @@ import * as THREE from 'three'
 import { MazeBoard, GoalSensor, TrapSensor } from './MazeBoard'
 import { Marble } from './Marble'
 import { Gem } from './Gem'
+import { MovingWall } from './MovingWall'
+import { IcePatch } from './IcePatch'
+import { RotatingSegment } from './RotatingSegment'
+import { WindZone } from './WindZone'
 import { useInput } from '../hooks/useInput'
 import { useGameStore, GameStatus } from '../store/gameStore'
 import type { Level } from '../data/levels'
 
 /** Create gradient texture for background */
-function createGradientTexture(): THREE.CanvasTexture {
+function createGradientTexture(topColor: string, bottomColor: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 2
   canvas.height = 256
   const ctx = canvas.getContext('2d')!
   const gradient = ctx.createLinearGradient(0, 0, 0, 256)
-  gradient.addColorStop(0, '#FFF8E7') // cream top
-  gradient.addColorStop(1, '#D4C5E2') // lavender bottom
+  gradient.addColorStop(0, topColor)
+  gradient.addColorStop(1, bottomColor)
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, 2, 256)
   const texture = new THREE.CanvasTexture(canvas)
@@ -26,9 +30,18 @@ function createGradientTexture(): THREE.CanvasTexture {
   return texture
 }
 
+/** Background colors per world */
+const WORLD_BACKGROUNDS: Record<number, [string, string]> = {
+  0: ['#FFF8E7', '#D4C5E2'], // Daily/Freeplay: default cream/lavender
+  1: ['#FFF8E7', '#D4C5E2'], // Workshop: cream/lavender
+  2: ['#D0E8FF', '#1A3A5C'], // Cavern: light blue/deep blue
+  3: ['#FFF8DC', '#8B7514'], // Temple: gold cream/deep gold
+}
+
 /** Background gradient + decorative spheres */
-function Background() {
-  const texture = useMemo(() => createGradientTexture(), [])
+function Background({ worldId }: { worldId: number }) {
+  const [top, bottom] = WORLD_BACKGROUNDS[worldId] ?? WORLD_BACKGROUNDS[0]
+  const texture = useMemo(() => createGradientTexture(top, bottom), [top, bottom])
 
   useFrame(({ scene }) => {
     if (scene.background !== texture) {
@@ -156,6 +169,8 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
         onFallOff={handleFallOff}
         onStartMoving={handleStartMoving}
         resetTrigger={resetTrigger}
+        windZones={level.windZones}
+        icePatches={level.icePatches}
       />
 
       {/* Goal sensor */}
@@ -184,6 +199,26 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
           onCollect={() => collectGem(i)}
         />
       ))}
+
+      {/* Moving walls */}
+      {level.movingWalls?.map((mw, i) => (
+        <MovingWall key={`mw-${i}`} def={mw} enabled={isPlaying} />
+      ))}
+
+      {/* Ice patches (visual only — friction handled in Marble) */}
+      {level.icePatches?.map((ip, i) => (
+        <IcePatch key={`ice-${i}`} def={ip} />
+      ))}
+
+      {/* Rotating segments */}
+      {level.rotatingSegments?.map((rs, i) => (
+        <RotatingSegment key={`rot-${i}`} def={rs} enabled={isPlaying} />
+      ))}
+
+      {/* Wind zones (visual only — force handled in Marble) */}
+      {level.windZones?.map((wz, i) => (
+        <WindZone key={`wind-${i}`} def={wz} />
+      ))}
     </>
   )
 }
@@ -209,7 +244,7 @@ export function GameScene({ level, onLevelComplete, onLevelFail }: GameSceneProp
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
     >
       <AdaptiveDpr pixelated />
-      <Background />
+      <Background worldId={level.world} />
       <DecoSpheres />
       <Lights />
       <Physics gravity={[0, -9.81, 0]} timeStep={1 / 60}>

@@ -1,6 +1,6 @@
-import { useGameStore, calculateStars } from '../store/gameStore'
+import { useGameStore, calculateStars, GameMode } from '../store/gameStore'
 import type { Level } from '../data/levels'
-import { WORLD_1_LEVEL_COUNT } from '../data/levels'
+import { TOTAL_LEVEL_COUNT, ALL_LEVELS } from '../data/levels'
 
 const GEM_LABELS = ['Emerald', 'Sapphire', 'Ruby'] as const
 const GEM_COLORS = ['#50C878', '#2E5090', '#E0115F'] as const
@@ -16,9 +16,11 @@ function formatTime(seconds: number): string {
 // --- Menu Screen ---
 interface MenuProps {
   onStartCampaign: () => void
+  onStartDaily: () => void
+  onStartFreeplay: () => void
 }
 
-export function MenuScreen({ onStartCampaign }: MenuProps) {
+export function MenuScreen({ onStartCampaign, onStartDaily, onStartFreeplay }: MenuProps) {
   const campaignProgress = useGameStore(s => s.campaignProgress)
   const totalStars = Object.values(campaignProgress.levels).reduce(
     (sum, lp) => sum + lp.stars, 0,
@@ -30,13 +32,33 @@ export function MenuScreen({ onStartCampaign }: MenuProps) {
       <h1 style={titleStyle}>Marble Maze 3D</h1>
       <p style={subtitleStyle}>Tilt the board. Guide the marble. Collect the gems.</p>
 
-      <div style={menuCardStyle}>
-        <button style={menuButtonStyle} onClick={onStartCampaign}>
-          Campaign
-        </button>
-        <p style={progressTextStyle}>
-          {levelsCompleted}/{WORLD_1_LEVEL_COUNT} levels | {totalStars} stars
-        </p>
+      <div style={menuButtonsStyle}>
+        <div style={menuCardStyle}>
+          <button style={menuButtonStyle} onClick={onStartCampaign}>
+            Campaign
+          </button>
+          <p style={progressTextStyle}>
+            {levelsCompleted}/{TOTAL_LEVEL_COUNT} levels | {totalStars} stars
+          </p>
+        </div>
+
+        <div style={menuCardStyle}>
+          <button style={menuButtonDailyStyle} onClick={onStartDaily}>
+            Daily Maze
+          </button>
+          <p style={progressTextStyle}>
+            New maze every day
+          </p>
+        </div>
+
+        <div style={menuCardStyle}>
+          <button style={menuButtonFreeplayStyle} onClick={onStartFreeplay}>
+            Free Play
+          </button>
+          <p style={progressTextStyle}>
+            Random mazes + replay levels
+          </p>
+        </div>
       </div>
 
       <div style={controlsInfoStyle}>
@@ -118,10 +140,11 @@ interface CompleteProps {
 export function LevelCompleteOverlay({ level, onNextLevel, onRestart, onMenu }: CompleteProps) {
   const timer = useGameStore(s => s.timer)
   const gemsCollected = useGameStore(s => s.gemsCollected)
+  const gameMode = useGameStore(s => s.gameMode)
   const allGems = gemsCollected.every(Boolean)
   const gemCount = gemsCollected.filter(Boolean).length
   const stars = calculateStars(timer, level.starThresholds, allGems)
-  const hasNextLevel = level.id < WORLD_1_LEVEL_COUNT
+  const hasNextLevel = gameMode === GameMode.Campaign && ALL_LEVELS.some(l => l.id === level.id + 1)
 
   return (
     <div style={overlayStyle} role="dialog" aria-label="Level complete">
@@ -171,57 +194,70 @@ export function LevelFailedOverlay({ onRestart, onMenu }: FailedProps) {
   )
 }
 
-// --- Level Select ---
-interface LevelSelectProps {
-  onSelectLevel: (id: number) => void
+// --- Free Play Mode Select ---
+interface FreePlaySelectProps {
+  onSelectCampaignLevel: (id: number) => void
+  onGenerateRandom: (size: 6 | 9 | 12) => void
   onBack: () => void
 }
 
-export function LevelSelectScreen({ onSelectLevel, onBack }: LevelSelectProps) {
+export function FreePlaySelect({ onSelectCampaignLevel, onGenerateRandom, onBack }: FreePlaySelectProps) {
   const campaignProgress = useGameStore(s => s.campaignProgress)
+  const unlockedLevels = ALL_LEVELS.filter(
+    l => Boolean(campaignProgress.levels[String(l.id)]),
+  )
 
   return (
-    <div style={menuContainerStyle} role="dialog" aria-label="Level select">
-      <h2 style={titleStyle}>World 1: Wooden Workshop</h2>
-      <div style={levelGridStyle}>
-        {Array.from({ length: WORLD_1_LEVEL_COUNT }, (_, i) => {
-          const id = i + 1
-          const progress = campaignProgress.levels[String(id)]
-          const unlocked = id === 1 || campaignProgress.levels[String(id - 1)]
-          return (
-            <button
-              key={id}
-              style={{
-                ...levelCardStyle,
-                opacity: unlocked ? 1 : 0.4,
-                cursor: unlocked ? 'pointer' : 'not-allowed',
-              }}
-              onClick={() => unlocked && onSelectLevel(id)}
-              disabled={!unlocked}
-              aria-label={`Level ${id}${progress ? `, ${progress.stars} stars` : ''}`}
-            >
-              <span style={levelNumberStyle}>{id}</span>
-              <div style={starsRowSmallStyle}>
-                {[1, 2, 3].map(s => (
-                  <span
-                    key={s}
-                    style={{
-                      fontSize: '14px',
-                      color: progress && s <= progress.stars ? '#FFD700' : '#555',
-                    }}
-                  >
-                    {'\u2605'}
-                  </span>
-                ))}
-              </div>
-              {progress && (
-                <span style={bestTimeStyle}>{formatTime(progress.bestTime)}</span>
-              )}
-            </button>
-          )
-        })}
+    <div style={menuContainerStyle} role="dialog" aria-label="Free play mode">
+      <h2 style={titleStyle}>Free Play</h2>
+
+      <div style={sectionStyle}>
+        <h3 style={sectionTitleStyle}>Random Maze</h3>
+        <div style={randomButtonsStyle}>
+          <button style={overlayButtonStyle} onClick={() => onGenerateRandom(6)}>
+            6x6 Easy
+          </button>
+          <button style={overlayButtonStyle} onClick={() => onGenerateRandom(9)}>
+            9x9 Medium
+          </button>
+          <button style={overlayButtonStyle} onClick={() => onGenerateRandom(12)}>
+            12x12 Hard
+          </button>
+        </div>
       </div>
-      <button style={overlayButtonSecondaryStyle} onClick={onBack}>Back</button>
+
+      {unlockedLevels.length > 0 && (
+        <div style={sectionStyle}>
+          <h3 style={sectionTitleStyle}>Replay Campaign Levels</h3>
+          <div style={replayGridStyle}>
+            {unlockedLevels.map(level => {
+              const progress = campaignProgress.levels[String(level.id)]
+              return (
+                <button
+                  key={level.id}
+                  style={replayLevelStyle}
+                  onClick={() => onSelectCampaignLevel(level.id)}
+                  aria-label={`Replay level ${level.id}: ${level.name}`}
+                >
+                  <span style={{ fontSize: '18px', fontWeight: 700 }}>{level.id}</span>
+                  <span style={{ fontSize: '9px', color: '#aaa' }}>{level.name}</span>
+                  {progress && (
+                    <div style={{ display: 'flex', gap: '2px' }}>
+                      {[1, 2, 3].map(s => (
+                        <span key={s} style={{ fontSize: '10px', color: s <= progress.stars ? '#FFD700' : '#444' }}>
+                          {'\u2605'}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <button style={overlayButtonSecondaryStyle} onClick={onBack}>Back to Menu</button>
     </div>
   )
 }
@@ -238,6 +274,7 @@ const menuContainerStyle: React.CSSProperties = {
   background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
   zIndex: 100,
   padding: '20px',
+  overflowY: 'auto',
 }
 
 const titleStyle: React.CSSProperties = {
@@ -254,12 +291,19 @@ const subtitleStyle: React.CSSProperties = {
   marginBottom: '32px',
 }
 
+const menuButtonsStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+  alignItems: 'center',
+  marginBottom: '24px',
+}
+
 const menuCardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '8px',
-  marginBottom: '24px',
+  gap: '4px',
 }
 
 const menuButtonStyle: React.CSSProperties = {
@@ -272,6 +316,19 @@ const menuButtonStyle: React.CSSProperties = {
   borderRadius: '12px',
   cursor: 'pointer',
   transition: 'transform 0.15s',
+  minWidth: '220px',
+}
+
+const menuButtonDailyStyle: React.CSSProperties = {
+  ...menuButtonStyle,
+  background: 'linear-gradient(135deg, #00D4FF, #0088CC)',
+  color: '#fff',
+}
+
+const menuButtonFreeplayStyle: React.CSSProperties = {
+  ...menuButtonStyle,
+  background: 'linear-gradient(135deg, #50C878, #228B22)',
+  color: '#fff',
 }
 
 const progressTextStyle: React.CSSProperties = {
@@ -421,39 +478,45 @@ const statStyle: React.CSSProperties = {
   color: '#ccc',
 }
 
-const levelGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-  gap: '12px',
-  maxWidth: '450px',
-  width: '100%',
-  margin: '24px 0',
-}
-
-const levelCardStyle: React.CSSProperties = {
+const sectionStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '4px',
-  padding: '16px 8px',
+  gap: '12px',
+  marginBottom: '20px',
+  width: '100%',
+  maxWidth: '500px',
+}
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: '18px',
+  fontWeight: 600,
+  color: '#ccc',
+}
+
+const randomButtonsStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  flexWrap: 'wrap',
+  justifyContent: 'center',
+}
+
+const replayGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+  gap: '8px',
+  width: '100%',
+}
+
+const replayLevelStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '2px',
+  padding: '10px 6px',
   background: 'rgba(255,255,255,0.08)',
   border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: '12px',
+  borderRadius: '10px',
   cursor: 'pointer',
   color: '#fff',
-}
-
-const levelNumberStyle: React.CSSProperties = {
-  fontSize: '24px',
-  fontWeight: 700,
-}
-
-const starsRowSmallStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '2px',
-}
-
-const bestTimeStyle: React.CSSProperties = {
-  fontSize: '11px',
-  color: '#888',
 }
