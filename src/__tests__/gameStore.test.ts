@@ -149,12 +149,14 @@ describe('gameStore', () => {
   describe('completeLevel', () => {
     it('should set status to complete', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.completeLevel(10.0, [8, 15, 25])
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Complete)
     })
 
-    it('should save progress to campaign', () => {
+    it('should save progress to campaign when in campaign mode', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(10.0, [8, 15, 25])
       const progress = useGameStore.getState().campaignProgress.levels['1']
@@ -162,8 +164,18 @@ describe('gameStore', () => {
       expect(progress.bestTime).toBe(10.0)
     })
 
+    it('should NOT save campaign progress when in daily mode', () => {
+      const store = useGameStore.getState()
+      store.setGameMode(GameMode.Daily)
+      store.startLevel(999)
+      store.completeLevel(10.0, [8, 15, 25])
+      const progress = useGameStore.getState().campaignProgress.levels['999']
+      expect(progress).toBeUndefined()
+    })
+
     it('should keep best time on replay', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(8.0, [8, 15, 25])
       store.resetLevel()
@@ -174,6 +186,7 @@ describe('gameStore', () => {
 
     it('should persist to localStorage', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(10.0, [8, 15, 25])
       expect(localStorageMock.setItem).toHaveBeenCalled()
@@ -193,6 +206,39 @@ describe('gameStore', () => {
       const store = useGameStore.getState()
       store.setGameMode(GameMode.Campaign)
       expect(useGameStore.getState().gameMode).toBe(GameMode.Campaign)
+    })
+  })
+
+  describe('saveDailyResult', () => {
+    it('should save daily result by date key', () => {
+      const store = useGameStore.getState()
+      store.saveDailyResult('2026-03-25', {
+        time: 45.2,
+        stars: 2,
+        gemsCollected: 2,
+      })
+      const result = useGameStore.getState().dailyResults['2026-03-25']
+      expect(result).toBeDefined()
+      expect(result.time).toBe(45.2)
+      expect(result.gemsCollected).toBe(2)
+    })
+
+    it('should persist daily results to localStorage', () => {
+      const store = useGameStore.getState()
+      store.saveDailyResult('2026-03-25', {
+        time: 30.0,
+        stars: 3,
+        gemsCollected: 3,
+      })
+      expect(localStorageMock.setItem).toHaveBeenCalled()
+    })
+  })
+
+  describe('setCurrentWorld', () => {
+    it('should set the current world', () => {
+      const store = useGameStore.getState()
+      store.setCurrentWorld(2)
+      expect(useGameStore.getState().currentWorld).toBe(2)
     })
   })
 })

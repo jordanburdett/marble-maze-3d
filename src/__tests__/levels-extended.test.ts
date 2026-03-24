@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { WORLD_1_LEVELS, getLevel, WORLD_1_LEVEL_COUNT } from '../data/levels'
+import { ALL_LEVELS, getLevel, TOTAL_LEVEL_COUNT } from '../data/levels'
 
 describe('level data — extended validation', () => {
   it('should have trap positions within board bounds', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       const halfW = level.boardSize[0] / 2
       const halfD = level.boardSize[1] / 2
       level.traps.forEach((trap, i) => {
@@ -20,7 +20,7 @@ describe('level data — extended validation', () => {
   })
 
   it('should not have any zero-length wall segments', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       level.walls.forEach((wall, i) => {
         const [x1, z1, x2, z2] = wall
         const samePoint = x1 === x2 && z1 === z2
@@ -33,7 +33,7 @@ describe('level data — extended validation', () => {
   })
 
   it('should have start and goal positions that are not on any trap', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       const TRAP_RADIUS = 0.3
       level.traps.forEach(trap => {
         const distToStart = Math.sqrt(
@@ -58,7 +58,7 @@ describe('level data — extended validation', () => {
   })
 
   it('should have gems that are not placed on traps', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       const SAFE_DISTANCE = 0.3 // TRAP_RADIUS
       level.gems.forEach((gem, gi) => {
         level.traps.forEach((trap, ti) => {
@@ -76,13 +76,13 @@ describe('level data — extended validation', () => {
   })
 
   it('should have unique names across all levels', () => {
-    const names = WORLD_1_LEVELS.map(l => l.name)
+    const names = ALL_LEVELS.map(l => l.name)
     const uniqueNames = new Set(names)
     expect(uniqueNames.size).toBe(names.length)
   })
 
   it('should have boardSize large enough to contain start and goal', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       const halfW = level.boardSize[0] / 2
       const halfD = level.boardSize[1] / 2
       // Start must be well within bounds (at least marble radius margin)
@@ -107,7 +107,7 @@ describe('level data — extended validation', () => {
   })
 
   it('should have all star thresholds as positive numbers', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       level.starThresholds.forEach((threshold) => {
         expect(threshold).toBeGreaterThan(0)
         expect(Number.isFinite(threshold)).toBe(true)
@@ -116,7 +116,7 @@ describe('level data — extended validation', () => {
   })
 
   it('should have wall heights and thicknesses as positive numbers when specified', () => {
-    WORLD_1_LEVELS.forEach(level => {
+    ALL_LEVELS.forEach(level => {
       if (level.wallHeight !== undefined) {
         expect(level.wallHeight).toBeGreaterThan(0)
       }
@@ -127,8 +127,7 @@ describe('level data — extended validation', () => {
   })
 
   it('should have board sizes as even dimensions (for centered coordinate system)', () => {
-    WORLD_1_LEVELS.forEach(level => {
-      // Board sizes should be even for clean center-at-origin layout
+    ALL_LEVELS.forEach(level => {
       expect(
         level.boardSize[0] % 2,
         `Level ${level.id} boardSize[0]=${level.boardSize[0]} is odd`,
@@ -155,7 +154,7 @@ describe('getLevel — extended edge cases', () => {
   })
 
   it('should return correct level for each ID in order', () => {
-    for (let i = 1; i <= WORLD_1_LEVEL_COUNT; i++) {
+    for (let i = 1; i <= TOTAL_LEVEL_COUNT; i++) {
       const level = getLevel(i)
       expect(level).toBeDefined()
       expect(level!.id).toBe(i)
@@ -163,10 +162,10 @@ describe('getLevel — extended edge cases', () => {
   })
 
   it('should return undefined for one past the last level', () => {
-    expect(getLevel(WORLD_1_LEVEL_COUNT + 1)).toBeUndefined()
+    expect(getLevel(TOTAL_LEVEL_COUNT + 1)).toBeUndefined()
   })
 
-  it('WORLD_1_LEVEL_COUNT should match the actual array length', () => {
-    expect(WORLD_1_LEVEL_COUNT).toBe(WORLD_1_LEVELS.length)
+  it('TOTAL_LEVEL_COUNT should match the actual array length', () => {
+    expect(TOTAL_LEVEL_COUNT).toBe(ALL_LEVELS.length)
   })
 })

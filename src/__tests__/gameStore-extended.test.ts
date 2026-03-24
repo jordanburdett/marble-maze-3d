@@ -69,7 +69,6 @@ describe('calculateStars — boundary and edge cases', () => {
   })
 
   it('should cap bonus star at 3 even with allGems and 2-star time', () => {
-    // 2 stars from time + 1 bonus from gems = 3, capped at 3
     expect(calculateStars(15, thresholds, true)).toBe(3)
   })
 
@@ -78,12 +77,10 @@ describe('calculateStars — boundary and edge cases', () => {
   })
 
   it('should give 2 stars for 1-star time with all gems collected', () => {
-    // 1 star from time + 1 bonus = 2
     expect(calculateStars(25, thresholds, true)).toBe(2)
   })
 
   it('should give 2 stars for time beyond 1-star threshold with allGems', () => {
-    // 1 star from time + 1 bonus = 2
     expect(calculateStars(999, thresholds, true)).toBe(2)
   })
 })
@@ -114,13 +111,13 @@ describe('gameStore — extended coverage', () => {
   describe('resumeGame edge cases', () => {
     it('should not resume from Playing state (already playing)', () => {
       const store = useGameStore.getState()
-      // Already playing
       store.resumeGame()
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Playing)
     })
 
     it('should not resume from Complete state', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.completeLevel(10, [8, 15, 25])
       store.resumeGame()
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Complete)
@@ -146,6 +143,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should not advance timer after completion', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startTimer()
       store.updateTimer(5.0)
       store.completeLevel(5.0, [8, 15, 25])
@@ -173,6 +171,7 @@ describe('gameStore — extended coverage', () => {
   describe('completeLevel — progress tracking details', () => {
     it('should track gem count in progress', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.collectGem(0)
       store.collectGem(2)
@@ -183,6 +182,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should preserve best gem count across replays', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.collectGem(0)
       store.collectGem(1)
@@ -199,6 +199,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should preserve best star count across replays', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(5.0, [8, 15, 25]) // fast time -> more stars
 
@@ -213,6 +214,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should update best time to lower value on replay', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(20.0, [8, 15, 25])
       store.resetLevel()
@@ -223,6 +225,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should not overwrite best time with worse time', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(10.0, [8, 15, 25])
       store.resetLevel()
@@ -233,6 +236,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should track progress for multiple different levels independently', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(10.0, [8, 15, 25])
       store.startLevel(2)
@@ -292,6 +296,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should reset game status to Playing when starting from Complete', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.completeLevel(10, [8, 15, 25])
       store.startLevel(2)
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Playing)
@@ -301,6 +306,7 @@ describe('gameStore — extended coverage', () => {
   describe('persistence — saveProgress and loadSavedProgress round trip', () => {
     it('should save and load campaign progress correctly', () => {
       const store = useGameStore.getState()
+      store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
       store.completeLevel(12.0, [8, 15, 25])
 
@@ -327,7 +333,6 @@ describe('gameStore — extended coverage', () => {
       localStorageMock.setItem('marble-maze-3d', 'NOT VALID JSON {{{')
       const store = useGameStore.getState()
       store.loadSavedProgress()
-      // Should fall back to defaults rather than crashing
       expect(useGameStore.getState().campaignProgress).toEqual({ levels: {} })
     })
   })
