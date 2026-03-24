@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
+import { joystickInputRef } from '../utils/inputRefs'
 
 const MAX_TILT_ANGLE = (12 * Math.PI) / 180 // 12 degrees in radians
 const TILT_RATE = 3.0 // radians per second toward max
@@ -25,7 +26,7 @@ interface MouseTiltState {
 }
 
 /**
- * Input system that maps keyboard/mouse to board tilt values.
+ * Input system that maps keyboard/mouse/joystick to board tilt values.
  * Returns a ref to the current tilt state that can be read each frame.
  */
 export function useInput(enabled: boolean) {
@@ -121,7 +122,7 @@ export function useInput(enabled: boolean) {
 
   /**
    * Call this each frame (from useFrame) with the current timestamp.
-   * Updates the tilt ref based on keyboard and mouse input.
+   * Updates the tilt ref based on keyboard, mouse, and virtual joystick input.
    */
   const updateTilt = useCallback((timestamp: number) => {
     const dt = lastTimeRef.current === 0 ? 1 / 60 : Math.min((timestamp - lastTimeRef.current) / 1000, 0.1)
@@ -150,6 +151,12 @@ export function useInput(enabled: boolean) {
     if (mouse.active) {
       targetX = -mouse.offsetZ // Mouse Y -> board X tilt (inverted)
       targetZ = mouse.offsetX  // Mouse X -> board Z tilt
+    }
+
+    // Virtual joystick overrides both if active
+    if (joystickInputRef.active) {
+      targetX = -joystickInputRef.y // Joystick Y -> board X tilt (inverted)
+      targetZ = joystickInputRef.x  // Joystick X -> board Z tilt
     }
 
     // Scale to max angle

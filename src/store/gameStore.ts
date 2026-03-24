@@ -21,6 +21,8 @@ export type GameStatus = (typeof GameStatus)[keyof typeof GameStatus]
 export const ControlMode = {
   Keyboard: 'keyboard',
   Mouse: 'mouse',
+  Tilt: 'tilt',
+  Joystick: 'joystick',
 } as const
 export type ControlMode = (typeof ControlMode)[keyof typeof ControlMode]
 
@@ -80,6 +82,7 @@ export interface GameState {
   setGameMode: (mode: GameMode) => void
   setCurrentWorld: (world: number) => void
   saveDailyResult: (dateKey: string, result: DailyResult) => void
+  updateSettings: (partial: Partial<GameSettings>) => void
   loadSavedProgress: () => void
   saveProgress: () => void
 }
@@ -241,6 +244,13 @@ export const useGameStore = create<GameState>((set, get) => {
 
     setCurrentWorld: (world: number) => {
       set({ currentWorld: world })
+    },
+
+    updateSettings: (partial: Partial<GameSettings>) => {
+      const state = get()
+      const newSettings = { ...state.settings, ...partial }
+      set({ settings: newSettings })
+      get().saveProgress()
     },
 
     saveDailyResult: (dateKey: string, result: DailyResult) => {

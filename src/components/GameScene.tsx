@@ -10,7 +10,12 @@ import { MovingWall } from './MovingWall'
 import { IcePatch } from './IcePatch'
 import { RotatingSegment } from './RotatingSegment'
 import { WindZone } from './WindZone'
+import { ConnectedParticleSystem } from './Particles'
+import { MarbleTrail } from './MarbleTrail'
+import { emitGemCollect, emitGoalFountain } from '../utils/particleState'
+import { trailPositions } from '../utils/trailState'
 import { useInput } from '../hooks/useInput'
+import { useAudio, useAudioEvents } from '../hooks/useAudio'
 import { useGameStore, GameStatus } from '../store/gameStore'
 import type { Level } from '../data/levels'
 
@@ -122,6 +127,10 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   const [resetTrigger, setResetTrigger] = useState(0)
   const failTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Audio hooks
+  useAudio(isPlaying)
+  const audio = useAudioEvents()
+
   // Update timer and tilt each frame
   useFrame((state, delta) => {
     if (isPlaying) {
@@ -130,31 +139,52 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
+  // Reset trail on level reset
+  useEffect(() => {
+    trailPositions.reset()
+  }, [resetTrigger])
+
   const handleStartMoving = useCallback(() => {
     startTimer()
   }, [startTimer])
 
   const handleTrapEnter = useCallback(() => {
     if (failTimeoutRef.current) return
+    audio.playTrapFall()
+    audio.stopRoll()
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
       failTimeoutRef.current = null
       setResetTrigger(prev => prev + 1)
     }, 1000)
-  }, [onLevelFail])
+  }, [onLevelFail, audio])
 
   const handleFallOff = useCallback(() => {
     if (failTimeoutRef.current) return
+    audio.playTrapFall()
+    audio.stopRoll()
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
       failTimeoutRef.current = null
       setResetTrigger(prev => prev + 1)
     }, 1000)
-  }, [onLevelFail])
+  }, [onLevelFail, audio])
 
   const handleGoalReach = useCallback(() => {
+    audio.playGoalReached()
+    audio.stopRoll()
+    emitGoalFountain(level.goalPosition[0], 0.5, level.goalPosition[1])
     onLevelComplete()
-  }, [onLevelComplete])
+  }, [onLevelComplete, audio, level.goalPosition])
+
+  const handleGemCollect = useCallback((index: number) => {
+    collectGem(index)
+    audio.playGemCollect()
+    const gem = level.gems[index]
+    if (gem) {
+      emitGemCollect(gem[0], 0.6, gem[1], index)
+    }
+  }, [collectGem, audio, level.gems])
 
   return (
     <>
@@ -171,7 +201,16 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
         resetTrigger={resetTrigger}
         windZones={level.windZones}
         icePatches={level.icePatches}
+        onRoll={audio.playRoll}
+        onStopRoll={audio.stopRoll}
+        onKnock={audio.playKnock}
       />
+
+      {/* Marble trail */}
+      <MarbleTrail worldId={level.world} />
+
+      {/* Particle system */}
+      <ConnectedParticleSystem />
 
       {/* Goal sensor */}
       <GoalSensor
@@ -196,7 +235,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
           position={gem}
           index={i}
           collected={gemsCollected[i]}
-          onCollect={() => collectGem(i)}
+          onCollect={() => handleGemCollect(i)}
         />
       ))}
 

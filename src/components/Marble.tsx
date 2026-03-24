@@ -5,12 +5,15 @@ import { Environment } from '@react-three/drei'
 import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import type { WindZoneDef, IcePatchDef } from '../data/levels'
+import { trailPositions } from '../utils/trailState'
 
 const MARBLE_RADIUS = 0.2
 const VELOCITY_THRESHOLD = 0.05 // minimum velocity to start timer
 const CAMERA_LERP = 3.0
 const NORMAL_DAMPING = 0.5
 const ICE_DAMPING = 0.05
+const ROLL_THRESHOLD = 0.3 // minimum speed to play roll sound
+const KNOCK_THRESHOLD = 1.0 // minimum speed change to trigger knock
 
 interface MarbleProps {
   startPosition: [number, number]
@@ -19,6 +22,9 @@ interface MarbleProps {
   resetTrigger: number
   windZones?: WindZoneDef[]
   icePatches?: IcePatchDef[]
+  onRoll?: (speed: number) => void
+  onStopRoll?: () => void
+  onKnock?: (velocity: number) => void
 }
 
 /** Check if a point [x,z] is inside a rectangular zone */
@@ -33,11 +39,13 @@ function isInsideRect(
   )
 }
 
-export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, windZones, icePatches }: MarbleProps) {
+export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, windZones, icePatches, onRoll, onStopRoll, onKnock }: MarbleProps) {
   const bodyRef = useRef<RapierRigidBody>(null)
   const hasStartedMoving = useRef(false)
   const hasFallenOff = useRef(false)
   const cameraTarget = useRef(new THREE.Vector3(startPosition[0], 0, startPosition[1]))
+  const prevSpeed = useRef(0)
+  const wasRolling = useRef(false)
 
   // Reusable Vector3 objects — hoisted to avoid per-frame allocation
   const tempMarbleXZ = useRef(new THREE.Vector3())
@@ -55,6 +63,8 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
     body.setAngvel({ x: 0, y: 0, z: 0 }, true)
     hasStartedMoving.current = false
     hasFallenOff.current = false
+    prevSpeed.current = 0
+    wasRolling.current = false
     cameraTarget.current.set(startPosition[0], 0, startPosition[1])
   }, [resetTrigger, startPosition])
 
@@ -79,6 +89,27 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
       hasStartedMoving.current = true
       onStartMoving()
     }
+
+    // --- Audio: rolling and knock detection ---
+    // Detect sudden speed drops (wall collision)
+    const speedDrop = prevSpeed.current - speed
+    if (speedDrop > KNOCK_THRESHOLD && onKnock) {
+      onKnock(speedDrop)
+    }
+
+    // Rolling sound
+    if (speed > ROLL_THRESHOLD) {
+      if (onRoll) onRoll(speed)
+      wasRolling.current = true
+    } else if (wasRolling.current) {
+      if (onStopRoll) onStopRoll()
+      wasRolling.current = false
+    }
+
+    prevSpeed.current = speed
+
+    // --- Trail position update ---
+    trailPositions.update(pos.x, pos.y, pos.z)
 
     // Apply wind zone forces
     if (windZones) {

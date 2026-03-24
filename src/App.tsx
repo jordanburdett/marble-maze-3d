@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { GameScene } from './components/GameScene'
 import {
   MenuScreen,
@@ -10,7 +10,9 @@ import {
 } from './components/HUD'
 import { CampaignMap } from './components/CampaignMap'
 import { DailyResult } from './components/DailyResult'
-import { useGameStore, GameMode, GameStatus } from './store/gameStore'
+import { SettingsScreen } from './components/SettingsScreen'
+import { VirtualJoystick } from './components/VirtualJoystick'
+import { useGameStore, GameMode, GameStatus, ControlMode } from './store/gameStore'
 import { getLevel, ALL_LEVELS } from './data/levels'
 import {
   generateDailyMaze,
@@ -19,6 +21,9 @@ import {
   markDailyPlayed,
   getTodayKey,
 } from './utils/mazeGenerator'
+import { isMobileDevice } from './hooks/useTiltControls'
+import { AudioEngine } from './utils/AudioEngine'
+import { joystickInputRef } from './utils/inputRefs'
 import type { Level } from './data/levels'
 import type { MazeSize } from './utils/mazeGenerator'
 
@@ -28,15 +33,18 @@ const Screen = {
   FreePlaySelect: 'freePlaySelect',
   Playing: 'playing',
   DailyResult: 'dailyResult',
+  Settings: 'settings',
 } as const
 type Screen = (typeof Screen)[keyof typeof Screen]
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>(Screen.Menu)
   const [activeLevel, setActiveLevel] = useState<Level | null>(null)
+  const prevScreenRef = useRef<Screen>(Screen.Menu)
 
   const gameMode = useGameStore(s => s.gameMode)
   const gameStatus = useGameStore(s => s.gameStatus)
+  const controlMode = useGameStore(s => s.settings.controlMode)
   const setGameMode = useGameStore(s => s.setGameMode)
   const startLevel = useGameStore(s => s.startLevel)
   const resetLevel = useGameStore(s => s.resetLevel)
@@ -52,6 +60,8 @@ export default function App() {
   // Track the daily result for display
   const [dailyGemCount, setDailyGemCount] = useState(0)
   const [dailyTime, setDailyTime] = useState(0)
+
+  const mobile = isMobileDevice()
 
   // Load saved progress on mount
   useEffect(() => {
@@ -96,6 +106,15 @@ export default function App() {
     setScreen(Screen.FreePlaySelect)
   }, [setGameMode])
 
+  const handleOpenSettings = useCallback(() => {
+    prevScreenRef.current = screen
+    setScreen(Screen.Settings)
+  }, [screen])
+
+  const handleCloseSettings = useCallback(() => {
+    setScreen(prevScreenRef.current)
+  }, [])
+
   const handleSelectCampaignLevel = useCallback((id: number) => {
     const level = getLevel(id)
     if (level) {
@@ -123,6 +142,9 @@ export default function App() {
 
   const handleLevelComplete = useCallback(() => {
     if (gameStatus !== GameStatus.Playing || !activeLevel) return
+
+    // Play star award sound
+    AudioEngine.get().playStarAward()
 
     if (gameMode === GameMode.Daily) {
       // Save daily result
@@ -171,13 +193,40 @@ export default function App() {
     setGameMode(GameMode.Menu)
     setActiveLevel(null)
     setScreen(Screen.Menu)
+    AudioEngine.get().stopAll()
   }, [setGameMode])
 
   const handleResume = useCallback(() => {
     resumeGame()
   }, [resumeGame])
 
+  // Joystick handlers
+  const handleJoystickMove = useCallback((x: number, y: number) => {
+    joystickInputRef.x = x
+    joystickInputRef.y = y
+    joystickInputRef.active = true
+  }, [])
+
+  const handleJoystickRelease = useCallback(() => {
+    joystickInputRef.x = 0
+    joystickInputRef.y = 0
+    joystickInputRef.active = false
+  }, [])
+
+  // Pause menu with settings navigation
+  const handlePauseSettings = useCallback(() => {
+    prevScreenRef.current = Screen.Playing
+    setScreen(Screen.Settings)
+  }, [])
+
   // --- Screen rendering ---
+
+  // Settings screen
+  if (screen === Screen.Settings) {
+    return (
+      <SettingsScreen onBack={handleCloseSettings} />
+    )
+  }
 
   // Menu screen
   if (screen === Screen.Menu || gameMode === GameMode.Menu) {
@@ -186,6 +235,7 @@ export default function App() {
         onStartCampaign={handleStartCampaign}
         onStartDaily={handleStartDaily}
         onStartFreeplay={handleStartFreeplay}
+        onSettings={handleOpenSettings}
       />
     )
   }
@@ -241,10 +291,19 @@ export default function App() {
 
       <GameHUD level={activeLevel} onPause={pauseGame} />
 
+      {/* Virtual joystick for mobile */}
+      {mobile && controlMode === ControlMode.Joystick && gameStatus === GameStatus.Playing && (
+        <VirtualJoystick
+          onMove={handleJoystickMove}
+          onRelease={handleJoystickRelease}
+        />
+      )}
+
       {gameStatus === GameStatus.Paused && (
         <PauseOverlay
           onResume={handleResume}
           onRestart={handleRestart}
+          onSettings={handlePauseSettings}
           onMenu={handleBackToMenu}
         />
       )}

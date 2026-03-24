@@ -18,9 +18,10 @@ interface MenuProps {
   onStartCampaign: () => void
   onStartDaily: () => void
   onStartFreeplay: () => void
+  onSettings?: () => void
 }
 
-export function MenuScreen({ onStartCampaign, onStartDaily, onStartFreeplay }: MenuProps) {
+export function MenuScreen({ onStartCampaign, onStartDaily, onStartFreeplay, onSettings }: MenuProps) {
   const campaignProgress = useGameStore(s => s.campaignProgress)
   const totalStars = Object.values(campaignProgress.levels).reduce(
     (sum, lp) => sum + lp.stars, 0,
@@ -60,6 +61,12 @@ export function MenuScreen({ onStartCampaign, onStartDaily, onStartFreeplay }: M
           </p>
         </div>
       </div>
+
+      {onSettings && (
+        <button style={settingsButtonStyle} onClick={onSettings}>
+          Settings
+        </button>
+      )}
 
       <div style={controlsInfoStyle}>
         <p><strong>Controls:</strong></p>
@@ -113,16 +120,20 @@ export function GameHUD({ level, onPause }: HUDProps) {
 interface PauseProps {
   onResume: () => void
   onRestart: () => void
+  onSettings?: () => void
   onMenu: () => void
 }
 
-export function PauseOverlay({ onResume, onRestart, onMenu }: PauseProps) {
+export function PauseOverlay({ onResume, onRestart, onSettings, onMenu }: PauseProps) {
   return (
     <div style={overlayStyle} role="dialog" aria-label="Game paused">
       <div style={overlayCardStyle}>
         <h2 style={overlayTitleStyle}>Paused</h2>
         <button style={overlayButtonStyle} onClick={onResume}>Resume</button>
         <button style={overlayButtonStyle} onClick={onRestart}>Restart Level</button>
+        {onSettings && (
+          <button style={overlayButtonSecondaryStyle} onClick={onSettings}>Settings</button>
+        )}
         <button style={overlayButtonSecondaryStyle} onClick={onMenu}>Main Menu</button>
       </div>
     </div>
@@ -334,6 +345,19 @@ const menuButtonFreeplayStyle: React.CSSProperties = {
 const progressTextStyle: React.CSSProperties = {
   fontSize: '13px',
   color: '#888',
+}
+
+const settingsButtonStyle: React.CSSProperties = {
+  padding: '10px 32px',
+  fontSize: '14px',
+  fontWeight: 500,
+  background: 'rgba(255,255,255,0.1)',
+  color: '#ccc',
+  border: '1px solid rgba(255,255,255,0.15)',
+  borderRadius: '8px',
+  cursor: 'pointer',
+  minWidth: '180px',
+  marginTop: '8px',
 }
 
 const controlsInfoStyle: React.CSSProperties = {
