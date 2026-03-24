@@ -33,6 +33,7 @@ function resetStore() {
       sfxVolume: 1.0,
       controlMode: ControlMode.Keyboard,
       cameraSensitivity: 1.0,
+      musicMode: false,
     },
   })
 }
