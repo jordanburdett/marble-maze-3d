@@ -19,7 +19,12 @@ interface MarbleProps {
 export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger }: MarbleProps) {
   const bodyRef = useRef<RapierRigidBody>(null)
   const hasStartedMoving = useRef(false)
+  const hasFallenOff = useRef(false)
   const cameraTarget = useRef(new THREE.Vector3(startPosition[0], 0, startPosition[1]))
+
+  // Reusable Vector3 objects — hoisted to avoid per-frame allocation
+  const tempMarbleXZ = useRef(new THREE.Vector3())
+  const tempCamPos = useRef(new THREE.Vector3())
 
   // Reset marble position when resetTrigger changes
   useEffect(() => {
@@ -32,6 +37,7 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger }
     body.setLinvel({ x: 0, y: 0, z: 0 }, true)
     body.setAngvel({ x: 0, y: 0, z: 0 }, true)
     hasStartedMoving.current = false
+    hasFallenOff.current = false
     cameraTarget.current.set(startPosition[0], 0, startPosition[1])
   }, [resetTrigger, startPosition])
 
@@ -41,9 +47,12 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger }
     const pos = body.translation()
     const vel = body.linvel()
 
-    // Check if marble fell off the board
+    // Check if marble fell off the board (only fire once per fall)
     if (pos.y < -2) {
-      onFallOff()
+      if (!hasFallenOff.current) {
+        hasFallenOff.current = true
+        onFallOff()
+      }
       return
     }
 
@@ -55,16 +64,16 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger }
     }
 
     // Camera follows marble with smooth lerp
-    const marbleXZ = new THREE.Vector3(pos.x, 0, pos.z)
-    cameraTarget.current.lerp(marbleXZ, CAMERA_LERP * delta)
+    tempMarbleXZ.current.set(pos.x, 0, pos.z)
+    cameraTarget.current.lerp(tempMarbleXZ.current, CAMERA_LERP * delta)
 
     const cam = state.camera
-    const targetCamPos = new THREE.Vector3(
+    tempCamPos.current.set(
       cameraTarget.current.x,
       8,
       cameraTarget.current.z + 6,
     )
-    cam.position.lerp(targetCamPos, CAMERA_LERP * delta)
+    cam.position.lerp(tempCamPos.current, CAMERA_LERP * delta)
     cam.lookAt(cameraTarget.current.x, 0, cameraTarget.current.z)
   })
 
