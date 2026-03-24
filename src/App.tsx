@@ -62,9 +62,9 @@ export default function App() {
   }, [startLevel])
 
   const handleLevelComplete = useCallback(() => {
-    if (gameStatus !== GameStatus.Playing) return
-    completeLevel(timer)
-  }, [completeLevel, timer, gameStatus])
+    if (gameStatus !== GameStatus.Playing || !level) return
+    completeLevel(timer, level.starThresholds)
+  }, [completeLevel, timer, gameStatus, level])
 
   const handleLevelFail = useCallback(() => {
     if (gameStatus !== GameStatus.Playing) return

@@ -149,14 +149,14 @@ describe('gameStore', () => {
   describe('completeLevel', () => {
     it('should set status to complete', () => {
       const store = useGameStore.getState()
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Complete)
     })
 
     it('should save progress to campaign', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       const progress = useGameStore.getState().campaignProgress.levels['1']
       expect(progress).toBeDefined()
       expect(progress.bestTime).toBe(10.0)
@@ -165,9 +165,9 @@ describe('gameStore', () => {
     it('should keep best time on replay', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(8.0)
+      store.completeLevel(8.0, [8, 15, 25])
       store.resetLevel()
-      store.completeLevel(12.0)
+      store.completeLevel(12.0, [8, 15, 25])
       const progress = useGameStore.getState().campaignProgress.levels['1']
       expect(progress.bestTime).toBe(8.0)
     })
@@ -175,7 +175,7 @@ describe('gameStore', () => {
     it('should persist to localStorage', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       expect(localStorageMock.setItem).toHaveBeenCalled()
     })
   })

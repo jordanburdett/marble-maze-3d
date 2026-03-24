@@ -71,7 +71,7 @@ export interface GameState {
   startLevel: (levelId: number) => void
   resetLevel: () => void
   collectGem: (index: number) => void
-  completeLevel: (time: number) => void
+  completeLevel: (time: number, starThresholds: [number, number, number]) => void
   failLevel: () => void
   pauseGame: () => void
   resumeGame: () => void
@@ -174,7 +174,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ gemsCollected: gems })
     },
 
-    completeLevel: (time: number) => {
+    completeLevel: (time: number, starThresholds: [number, number, number]) => {
       set({ gameStatus: GameStatus.Complete })
 
       // Save progress
@@ -184,10 +184,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const allGems = state.gemsCollected.every(Boolean)
       const gemCount = state.gemsCollected.filter(Boolean).length
 
-      // We need the level data to calculate stars — import at usage would be circular,
-      // so we pass a generic star calc. The caller should provide thresholds.
-      // For simplicity, use a default threshold approach
-      const stars = allGems ? 3 : time <= 15 ? 3 : time <= 25 ? 2 : 1
+      const stars = calculateStars(time, starThresholds, allGems)
 
       const newProgress: LevelProgress = {
         stars: Math.max(stars, existing?.stars ?? 0),

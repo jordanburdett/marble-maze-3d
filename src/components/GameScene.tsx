@@ -156,6 +156,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
       <GoalSensor
         position={level.goalPosition}
         onGoalReach={handleGoalReach}
+        resetTrigger={resetTrigger}
       />
 
       {/* Trap sensors */}

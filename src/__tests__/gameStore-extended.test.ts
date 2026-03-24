@@ -121,7 +121,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should not resume from Complete state', () => {
       const store = useGameStore.getState()
-      store.completeLevel(10)
+      store.completeLevel(10, [8, 15, 25])
       store.resumeGame()
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Complete)
     })
@@ -148,7 +148,7 @@ describe('gameStore — extended coverage', () => {
       const store = useGameStore.getState()
       store.startTimer()
       store.updateTimer(5.0)
-      store.completeLevel(5.0)
+      store.completeLevel(5.0, [8, 15, 25])
       store.updateTimer(5.0)
       expect(useGameStore.getState().timer).toBeCloseTo(5.0)
     })
@@ -176,7 +176,7 @@ describe('gameStore — extended coverage', () => {
       store.startLevel(1)
       store.collectGem(0)
       store.collectGem(2)
-      store.completeLevel(12.0)
+      store.completeLevel(12.0, [8, 15, 25])
       const progress = useGameStore.getState().campaignProgress.levels['1']
       expect(progress.gemsCollected).toBe(2)
     })
@@ -187,11 +187,11 @@ describe('gameStore — extended coverage', () => {
       store.collectGem(0)
       store.collectGem(1)
       store.collectGem(2)
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
 
       store.resetLevel()
       store.collectGem(0) // only 1 gem on replay
-      store.completeLevel(8.0)
+      store.completeLevel(8.0, [8, 15, 25])
 
       const progress = useGameStore.getState().campaignProgress.levels['1']
       expect(progress.gemsCollected).toBe(3) // kept best from first run
@@ -200,12 +200,12 @@ describe('gameStore — extended coverage', () => {
     it('should preserve best star count across replays', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(5.0) // fast time -> more stars
+      store.completeLevel(5.0, [8, 15, 25]) // fast time -> more stars
 
       const firstStars = useGameStore.getState().campaignProgress.levels['1'].stars
 
       store.resetLevel()
-      store.completeLevel(99.0) // very slow
+      store.completeLevel(99.0, [8, 15, 25]) // very slow
 
       const secondStars = useGameStore.getState().campaignProgress.levels['1'].stars
       expect(secondStars).toBeGreaterThanOrEqual(firstStars)
@@ -214,9 +214,9 @@ describe('gameStore — extended coverage', () => {
     it('should update best time to lower value on replay', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(20.0)
+      store.completeLevel(20.0, [8, 15, 25])
       store.resetLevel()
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       const progress = useGameStore.getState().campaignProgress.levels['1']
       expect(progress.bestTime).toBe(10.0)
     })
@@ -224,9 +224,9 @@ describe('gameStore — extended coverage', () => {
     it('should not overwrite best time with worse time', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       store.resetLevel()
-      store.completeLevel(20.0)
+      store.completeLevel(20.0, [8, 15, 25])
       const progress = useGameStore.getState().campaignProgress.levels['1']
       expect(progress.bestTime).toBe(10.0)
     })
@@ -234,11 +234,11 @@ describe('gameStore — extended coverage', () => {
     it('should track progress for multiple different levels independently', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       store.startLevel(2)
-      store.completeLevel(20.0)
+      store.completeLevel(20.0, [10, 18, 30])
       store.startLevel(3)
-      store.completeLevel(30.0)
+      store.completeLevel(30.0, [12, 20, 35])
 
       const progress = useGameStore.getState().campaignProgress
       expect(Object.keys(progress.levels)).toHaveLength(3)
@@ -292,7 +292,7 @@ describe('gameStore — extended coverage', () => {
 
     it('should reset game status to Playing when starting from Complete', () => {
       const store = useGameStore.getState()
-      store.completeLevel(10)
+      store.completeLevel(10, [8, 15, 25])
       store.startLevel(2)
       expect(useGameStore.getState().gameStatus).toBe(GameStatus.Playing)
     })
@@ -302,7 +302,7 @@ describe('gameStore — extended coverage', () => {
     it('should save and load campaign progress correctly', () => {
       const store = useGameStore.getState()
       store.startLevel(1)
-      store.completeLevel(12.0)
+      store.completeLevel(12.0, [8, 15, 25])
 
       // Simulate app restart: clear in-memory state, then load from storage
       useGameStore.setState({
@@ -337,7 +337,7 @@ describe('gameStore — extended coverage', () => {
       const store = useGameStore.getState()
       store.setGameMode(GameMode.Campaign)
       store.startLevel(1)
-      store.completeLevel(10.0)
+      store.completeLevel(10.0, [8, 15, 25])
       expect(useGameStore.getState().gameMode).toBe(GameMode.Campaign)
     })
 

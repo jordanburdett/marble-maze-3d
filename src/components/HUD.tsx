@@ -1,4 +1,4 @@
-import { useGameStore } from '../store/gameStore'
+import { useGameStore, calculateStars } from '../store/gameStore'
 import type { Level } from '../data/levels'
 import { WORLD_1_LEVEL_COUNT } from '../data/levels'
 
@@ -11,14 +11,6 @@ function formatTime(seconds: number): string {
   const ms = Math.floor((seconds % 1) * 10)
   if (mins > 0) return `${mins}:${String(secs).padStart(2, '0')}.${ms}`
   return `${secs}.${ms}s`
-}
-
-function starRating(time: number, thresholds: [number, number, number], allGems: boolean): number {
-  let stars = 1
-  if (time <= thresholds[1]) stars = 2
-  if (time <= thresholds[0]) stars = 3
-  if (allGems && stars < 3) stars = Math.min(stars + 1, 3)
-  return stars
 }
 
 // --- Menu Screen ---
@@ -128,7 +120,7 @@ export function LevelCompleteOverlay({ level, onNextLevel, onRestart, onMenu }: 
   const gemsCollected = useGameStore(s => s.gemsCollected)
   const allGems = gemsCollected.every(Boolean)
   const gemCount = gemsCollected.filter(Boolean).length
-  const stars = starRating(timer, level.starThresholds, allGems)
+  const stars = calculateStars(timer, level.starThresholds, allGems)
   const hasNextLevel = level.id < WORLD_1_LEVEL_COUNT
 
   return (
