@@ -10,6 +10,7 @@ interface SettingsScreenProps {
 export function SettingsScreen({ onBack }: SettingsScreenProps) {
   const settings = useGameStore(s => s.settings)
   const updateSettings = useGameStore(s => s.updateSettings)
+  const toggleMusicMode = useGameStore(s => s.toggleMusicMode)
   const mobile = isMobileDevice()
 
   const handleMusicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +83,40 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
           style={sliderStyle}
         />
       </div>
+
+      {/* Music Mode toggle — only show when SFX volume > 0 */}
+      {settings.sfxVolume > 0 && (
+        <div style={sectionStyle}>
+          <div style={toggleRowStyle}>
+            <label style={labelStyle} htmlFor="music-mode-toggle">
+              Music Mode
+            </label>
+            <button
+              id="music-mode-toggle"
+              role="switch"
+              aria-checked={settings.musicMode}
+              aria-label="Music Mode"
+              onClick={toggleMusicMode}
+              style={{
+                ...toggleStyle,
+                background: settings.musicMode
+                  ? 'linear-gradient(135deg, #FFD700, #FFA500)'
+                  : 'rgba(255,255,255,0.15)',
+              }}
+            >
+              <span
+                style={{
+                  ...toggleKnobStyle,
+                  transform: settings.musicMode ? 'translateX(20px)' : 'translateX(0)',
+                }}
+              />
+            </button>
+          </div>
+          <span style={tooltipStyle}>
+            Transform wall hits and zones into music
+          </span>
+        </div>
+      )}
 
       {/* Control mode — only show mobile options on mobile */}
       {mobile && (
@@ -181,6 +216,41 @@ const activeButtonStyle: React.CSSProperties = {
   color: '#1a1a2e',
   border: '1px solid #FFD700',
   fontWeight: 600,
+}
+
+const toggleRowStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+}
+
+const toggleStyle: React.CSSProperties = {
+  width: '44px',
+  height: '24px',
+  borderRadius: '12px',
+  border: '1px solid rgba(255,255,255,0.2)',
+  cursor: 'pointer',
+  position: 'relative',
+  padding: 0,
+  flexShrink: 0,
+}
+
+const toggleKnobStyle: React.CSSProperties = {
+  width: '18px',
+  height: '18px',
+  borderRadius: '50%',
+  background: '#fff',
+  position: 'absolute',
+  top: '2px',
+  left: '3px',
+  transition: 'transform 0.2s ease',
+  pointerEvents: 'none',
+}
+
+const tooltipStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: '#999',
+  fontStyle: 'italic',
 }
 
 const backButtonStyle: React.CSSProperties = {
