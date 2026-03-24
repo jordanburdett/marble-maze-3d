@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GameScene } from './components/GameScene'
 import {
   MenuScreen,
@@ -67,32 +67,51 @@ export default function App() {
 
   // Ghost marble HUD state
   const ghostEnabled = useGameStore(s => s.settings.ghostEnabled)
-  const [ghostBestTime, setGhostBestTime] = useState<number | null>(null)
   const [ghostFinished, setGhostFinished] = useState(false)
   const ghostFinishedRef = useRef(false)
+  const ghostFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Load ghost best time when level changes
-  useEffect(() => {
+  // Derive ghost best time from activeLevel + ghostEnabled (no effect needed)
+  const ghostBestTime = useMemo(() => {
     if (activeLevel && ghostEnabled) {
       const ghost = ghostStorage.loadGhost(activeLevel.id)
-      setGhostBestTime(ghost?.time ?? null)
-    } else {
-      setGhostBestTime(null)
+      return ghost?.time ?? null
     }
-    setGhostFinished(false)
-    ghostFinishedRef.current = false
-  }, [activeLevel, ghostEnabled, gameStatus])
+    return null
+  }, [activeLevel, ghostEnabled])
 
   // Poll ghostState.finished to detect when ghost finishes (driven by useFrame inside Canvas)
+  // On cleanup (level change, game status change), reset ghost finished state.
   useEffect(() => {
-    if (gameStatus !== GameStatus.Playing || !ghostEnabled || !activeLevel) return
+    if (gameStatus !== GameStatus.Playing || !ghostEnabled || !activeLevel) {
+      // Cleanup: reset finished state
+      ghostFinishedRef.current = false
+      if (ghostFlashTimeoutRef.current) {
+        clearTimeout(ghostFlashTimeoutRef.current)
+        ghostFlashTimeoutRef.current = null
+      }
+      return
+    }
+    ghostFinishedRef.current = false
     const interval = setInterval(() => {
       if (ghostState.finished && !ghostFinishedRef.current) {
         ghostFinishedRef.current = true
         setGhostFinished(true)
+        // Auto-hide "Ghost finished!" flash after 2 seconds
+        ghostFlashTimeoutRef.current = setTimeout(() => {
+          setGhostFinished(false)
+          ghostFlashTimeoutRef.current = null
+        }, 2000)
       }
     }, 100)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      ghostFinishedRef.current = false
+      if (ghostFlashTimeoutRef.current) {
+        clearTimeout(ghostFlashTimeoutRef.current)
+        ghostFlashTimeoutRef.current = null
+      }
+    }
   }, [gameStatus, ghostEnabled, activeLevel])
 
   const mobile = isMobileDevice()

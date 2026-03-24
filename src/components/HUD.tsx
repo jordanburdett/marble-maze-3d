@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useGameStore, calculateStars, GameMode } from '../store/gameStore'
 import type { Level } from '../data/levels'
 import { TOTAL_LEVEL_COUNT, ALL_LEVELS } from '../data/levels'
@@ -88,26 +88,9 @@ interface HUDProps {
   ghostFinished?: boolean
 }
 
-/** Duration to show "Ghost finished!" flash (seconds) */
-const GHOST_FLASH_DURATION = 2.0
-
 export function GameHUD({ level, onPause, ghostBestTime, ghostFinished }: HUDProps) {
   const timer = useGameStore(s => s.timer)
   const gemsCollected = useGameStore(s => s.gemsCollected)
-  const [showGhostFlash, setShowGhostFlash] = useState(false)
-
-  // Flash "Ghost finished!" for 2 seconds when ghost finishes
-  useEffect(() => {
-    if (ghostFinished) {
-      setShowGhostFlash(true)
-      const timeout = setTimeout(() => {
-        setShowGhostFlash(false)
-      }, GHOST_FLASH_DURATION * 1000)
-      return () => clearTimeout(timeout)
-    } else {
-      setShowGhostFlash(false)
-    }
-  }, [ghostFinished])
 
   return (
     <div style={hudContainerStyle} role="status" aria-label="Game HUD">
@@ -136,7 +119,7 @@ export function GameHUD({ level, onPause, ghostBestTime, ghostFinished }: HUDPro
       {ghostBestTime != null && ghostBestTime > 0 && (
         <div style={ghostInfoStyle} aria-label="Ghost best time">
           <span style={ghostTimeStyle}>Ghost: {formatTime(ghostBestTime)}</span>
-          {showGhostFlash && (
+          {ghostFinished && (
             <span style={ghostFlashStyle}>Ghost finished!</span>
           )}
         </div>

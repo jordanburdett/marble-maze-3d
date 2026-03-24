@@ -140,8 +140,18 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   const [resetTrigger, setResetTrigger] = useState(0)
   const failTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Ghost trajectory state — loaded from ghostStorage on level start/reset
-  const [ghostTrajectory, setGhostTrajectory] = useState<TrajectoryFrame[] | null>(null)
+  // Ghost trajectory — derived from ghostStorage, re-read on level change or reset.
+  // resetTrigger is intentionally included to re-fetch after restart (ghost may have been saved).
+  const ghostTrajectory = useMemo<TrajectoryFrame[] | null>(() => {
+    // Access resetTrigger so useMemo re-runs on reset (ESLint will see it used)
+    void resetTrigger
+    ghostState.reset()
+    if (ghostEnabled) {
+      const ghost = ghostStorage.loadGhost(level.id)
+      return ghost?.trajectory ?? null
+    }
+    return null
+  }, [ghostEnabled, level.id, resetTrigger])
 
   // Audio hooks
   useAudio(isPlaying)
@@ -230,20 +240,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
-  // Load ghost trajectory for current level
-  const loadGhostTrajectory = useCallback(() => {
-    ghostState.reset()
-    if (ghostEnabled) {
-      const ghost = ghostStorage.loadGhost(level.id)
-      if (ghost) {
-        setGhostTrajectory(ghost.trajectory)
-        return
-      }
-    }
-    setGhostTrajectory(null)
-  }, [ghostEnabled, level.id])
-
-  // Reset trail, camera, music, ghost, and trajectory recording on level reset
+  // Reset trail, camera, music, and trajectory recording on level reset
   useEffect(() => {
     trailPositions.reset()
     trajectoryRecorder.clear()
@@ -253,16 +250,14 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     music.resetNoteIndex()
     music.stopAllZones()
     wallGlowState.reset()
-    loadGhostTrajectory()
-  }, [resetTrigger, loadGhostTrajectory])
+  }, [resetTrigger])
 
   // Reset camera and start recording on initial mount / level change
   useEffect(() => {
     cameraState.resetForLevel()
     trajectoryRecorder.clear()
     trajectoryRecorder.startRecording()
-    loadGhostTrajectory()
-  }, [level.id, loadGhostTrajectory])
+  }, [level.id])
 
   const handleStartMoving = useCallback(() => {
     startTimer()

@@ -3,26 +3,9 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { TrajectoryFrame } from '../utils/trajectoryRecorder'
 import { ghostState } from '../utils/ghostState'
+import { interpolateTrajectory, GHOST_BASE_OPACITY, GHOST_FADE_DURATION } from '../utils/ghostHelpers'
 import type { GameStatus } from '../store/gameStore'
-
-/** World-specific ghost colors */
-const WORLD_GHOST_COLORS: Record<number, string> = {
-  0: '#FFD700', // Daily/Freeplay: gold
-  1: '#FFD700', // World 1: gold
-  2: '#00E5CC', // World 2: cyan
-  3: '#FF8C00', // World 3: orange
-}
-
-/** Get ghost color for a world */
-export function getGhostColor(worldId: number): string {
-  return WORLD_GHOST_COLORS[worldId] ?? WORLD_GHOST_COLORS[0]
-}
-
-/** Duration of fade-out when ghost finishes (seconds) */
-const FADE_DURATION = 0.5
-
-/** Base opacity for the ghost marble */
-const BASE_OPACITY = 0.35
+import { getGhostColor } from '../utils/ghostHelpers'
 
 interface GhostMarbleProps {
   trajectory: TrajectoryFrame[]
@@ -30,54 +13,6 @@ interface GhostMarbleProps {
   ghostEnabled: boolean
   gameStatus: GameStatus
   timer: number
-}
-
-/**
- * Find the two bracketing frames for a given time and interpolate position.
- * Returns null if time is before first frame or after last frame.
- */
-export function interpolateTrajectory(
-  trajectory: TrajectoryFrame[],
-  time: number,
-): { x: number; y: number; z: number; pastEnd: boolean } | null {
-  if (trajectory.length === 0) return null
-
-  const first = trajectory[0]
-  const last = trajectory[trajectory.length - 1]
-
-  // Before trajectory starts
-  if (time < first.t) {
-    return { x: first.x, y: first.y, z: first.z, pastEnd: false }
-  }
-
-  // Past the end of trajectory
-  if (time >= last.t) {
-    return { x: last.x, y: last.y, z: last.z, pastEnd: true }
-  }
-
-  // Binary search for bracketing frames
-  let lo = 0
-  let hi = trajectory.length - 1
-  while (lo < hi - 1) {
-    const mid = (lo + hi) >> 1
-    if (trajectory[mid].t <= time) {
-      lo = mid
-    } else {
-      hi = mid
-    }
-  }
-
-  const a = trajectory[lo]
-  const b = trajectory[hi]
-  const dt = b.t - a.t
-  const alpha = dt > 0 ? (time - a.t) / dt : 0
-
-  return {
-    x: a.x + (b.x - a.x) * alpha,
-    y: a.y + (b.y - a.y) * alpha,
-    z: a.z + (b.z - a.z) * alpha,
-    pastEnd: false,
-  }
 }
 
 /**
@@ -95,7 +30,7 @@ export function GhostMarble({ trajectory, worldId, ghostEnabled, gameStatus, tim
     return new THREE.MeshStandardMaterial({
       color,
       transparent: true,
-      opacity: BASE_OPACITY,
+      opacity: GHOST_BASE_OPACITY,
       depthWrite: false,
       metalness: 0.6,
       roughness: 0.3,
@@ -141,8 +76,8 @@ export function GhostMarble({ trajectory, worldId, ghostEnabled, gameStatus, tim
         ghostState.finishedAt = timer
       }
       const elapsed = timer - fadeStartTime.current
-      const fadeAlpha = Math.max(0, 1 - elapsed / FADE_DURATION)
-      const currentOpacity = BASE_OPACITY * fadeAlpha
+      const fadeAlpha = Math.max(0, 1 - elapsed / GHOST_FADE_DURATION)
+      const currentOpacity = GHOST_BASE_OPACITY * fadeAlpha
       materialRef.current.opacity = currentOpacity
       ghostState.opacity = currentOpacity
 
@@ -152,8 +87,8 @@ export function GhostMarble({ trajectory, worldId, ghostEnabled, gameStatus, tim
         return
       }
     } else {
-      materialRef.current.opacity = BASE_OPACITY
-      ghostState.opacity = BASE_OPACITY
+      materialRef.current.opacity = GHOST_BASE_OPACITY
+      ghostState.opacity = GHOST_BASE_OPACITY
       meshRef.current.visible = true
     }
 

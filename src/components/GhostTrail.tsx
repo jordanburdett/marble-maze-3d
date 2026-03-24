@@ -2,7 +2,7 @@ import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ghostState, GHOST_TRAIL_LENGTH } from '../utils/ghostState'
-import { getGhostColor } from './GhostMarble'
+import { getGhostColor } from '../utils/ghostHelpers'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 
 const GHOST_TRAIL_RADIUS = 0.03
