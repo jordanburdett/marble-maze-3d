@@ -41,6 +41,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(Screen.Menu)
   const [activeLevel, setActiveLevel] = useState<Level | null>(null)
   const prevScreenRef = useRef<Screen>(Screen.Menu)
+  const failTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const gameMode = useGameStore(s => s.gameMode)
   const gameStatus = useGameStore(s => s.gameStatus)
@@ -90,16 +91,26 @@ export default function App() {
     setScreen(Screen.CampaignMap)
   }, [setGameMode])
 
+  const dailyResults = useGameStore(s => s.dailyResults)
+
   const handleStartDaily = useCallback(() => {
     if (hasDailyBeenPlayed()) {
-      // Already played today — still allow viewing
+      // Already played today — show saved result instead of replaying
+      const todayKey = getTodayKey()
+      const saved = dailyResults[todayKey]
+      if (saved) {
+        setDailyGemCount(saved.gemsCollected)
+        setDailyTime(saved.time)
+      }
+      setScreen(Screen.DailyResult)
+      return
     }
     setGameMode(GameMode.Daily)
     const maze = generateDailyMaze()
     setActiveLevel(maze)
     startLevel(maze.id)
     setScreen(Screen.Playing)
-  }, [setGameMode, startLevel])
+  }, [setGameMode, startLevel, dailyResults])
 
   const handleStartFreeplay = useCallback(() => {
     setGameMode(GameMode.Freeplay)
@@ -167,11 +178,22 @@ export default function App() {
   const handleLevelFail = useCallback(() => {
     if (gameStatus !== GameStatus.Playing) return
     failLevel()
-    // Auto-reset after 1 second
-    setTimeout(() => {
+    // Auto-reset after 1 second — store timeout ID for cleanup
+    failTimeoutRef.current = setTimeout(() => {
+      failTimeoutRef.current = null
       resetLevel()
     }, 1000)
   }, [failLevel, resetLevel, gameStatus])
+
+  // Clean up fail timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (failTimeoutRef.current !== null) {
+        clearTimeout(failTimeoutRef.current)
+        failTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   const handleNextLevel = useCallback(() => {
     if (!activeLevel) return
@@ -190,6 +212,10 @@ export default function App() {
   }, [resetLevel])
 
   const handleBackToMenu = useCallback(() => {
+    if (failTimeoutRef.current !== null) {
+      clearTimeout(failTimeoutRef.current)
+      failTimeoutRef.current = null
+    }
     setGameMode(GameMode.Menu)
     setActiveLevel(null)
     setScreen(Screen.Menu)
