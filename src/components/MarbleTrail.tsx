@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { trailPositions, TRAIL_LENGTH } from '../utils/trailState'
@@ -36,6 +36,13 @@ export function MarbleTrail({ worldId }: MarbleTrailProps) {
       depthWrite: false,
     })
   }, [color])
+
+  // Dispose material on unmount
+  useEffect(() => {
+    return () => {
+      material.dispose()
+    }
+  }, [material])
 
   useFrame(() => {
     if (!meshRef.current) return
