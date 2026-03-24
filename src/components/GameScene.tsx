@@ -249,6 +249,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     const music = MusicEngine.get()
     music.resetNoteIndex()
     music.stopAllZones()
+    music.stopAllGhostMusic()
     wallGlowState.reset()
   }, [resetTrigger])
 
