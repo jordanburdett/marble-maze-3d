@@ -44,6 +44,11 @@ class AudioEngine {
     }
   }
 
+  /** Get the shared AudioContext (null if not yet initialized) */
+  getContext(): AudioContext | null {
+    return this.ctx
+  }
+
   /** Ensure audio context is running (browsers suspend until user gesture) */
   private resume(): void {
     if (this.ctx && this.ctx.state === 'suspended') {
