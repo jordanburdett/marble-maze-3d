@@ -17,7 +17,9 @@ import { trailPositions } from '../utils/trailState'
 import { cameraState, CameraPhase } from '../utils/cameraState'
 import { useInput } from '../hooks/useInput'
 import { useAudio, useAudioEvents } from '../hooks/useAudio'
+import { AudioEngine } from '../utils/AudioEngine'
 import { MusicEngine } from '../utils/MusicEngine'
+import { wallGlowState } from '../utils/wallGlowState'
 import { useGameStore, GameStatus } from '../store/gameStore'
 import type { Level } from '../data/levels'
 
@@ -123,6 +125,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   const collectGem = useGameStore(s => s.collectGem)
   const startTimer = useGameStore(s => s.startTimer)
   const updateTimer = useGameStore(s => s.updateTimer)
+  const musicMode = useGameStore(s => s.settings.musicMode)
 
   const isPlaying = gameStatus === GameStatus.Playing
   const { tiltRef, updateTilt } = useInput(isPlaying)
@@ -136,11 +139,36 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   // World ID for music engine (clamp to valid range 1-3, default to 1)
   const worldId = (Math.max(1, Math.min(3, level.world)) as 1 | 2 | 3)
 
+  // Number of walls for random glow index selection
+  const wallCount = level.walls.length
+
+  // Manage ambient pad based on musicMode + world changes
+  useEffect(() => {
+    const music = MusicEngine.get()
+    if (musicMode && isPlaying) {
+      // Start world-specific ambient pad (replaces default ambient)
+      AudioEngine.get().stopAmbient()
+      music.startAmbientPad(worldId)
+    } else if (!musicMode) {
+      // Stop music ambient, restart standard ambient
+      music.stopAllMusicLayers()
+      if (isPlaying) {
+        AudioEngine.get().startAmbient()
+      }
+    }
+  }, [musicMode, worldId, isPlaying])
+
   // Music-aware knock: play musical note when musicMode on, always play SFX knock
   const handleKnock = useCallback((velocity: number) => {
     audio.playKnock(velocity)
-    MusicEngine.get().playMusicalKnock(velocity, worldId)
-  }, [audio, worldId])
+    const music = MusicEngine.get()
+    music.playMusicalKnock(velocity, worldId)
+    // Trigger wall glow if music mode is on
+    if (music.isEnabled() && wallCount > 0) {
+      const randomWall = Math.floor(Math.random() * wallCount)
+      wallGlowState.trigger(randomWall, worldId)
+    }
+  }, [audio, worldId, wallCount])
 
   // Music-aware roll: feed speed to MusicEngine for BPM tracking + start/update drone
   const handleRoll = useCallback((speed: number) => {
@@ -198,6 +226,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     const music = MusicEngine.get()
     music.resetNoteIndex()
     music.stopAllZones()
+    wallGlowState.reset()
   }, [resetTrigger])
 
   // Reset camera on initial mount / level change
