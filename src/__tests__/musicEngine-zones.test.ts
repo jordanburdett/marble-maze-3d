@@ -114,6 +114,7 @@ function disableMusicMode() {
     settings: {
       ...useGameStore.getState().settings,
       musicMode: false,
+      ghostEnabled: true,
     },
   })
 }
@@ -145,6 +146,7 @@ describe('MusicEngine Zone-Based Harmonic Layers', () => {
         controlMode: 'keyboard',
         cameraSensitivity: 1.0,
         musicMode: false,
+        ghostEnabled: true,
       },
     })
   })

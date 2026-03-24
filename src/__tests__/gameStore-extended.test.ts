@@ -34,6 +34,7 @@ function resetStore() {
       controlMode: ControlMode.Keyboard,
       cameraSensitivity: 1.0,
       musicMode: false,
+      ghostEnabled: true,
     },
   })
 }

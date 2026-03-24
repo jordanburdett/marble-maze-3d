@@ -34,6 +34,7 @@ export interface GameSettings {
   controlMode: ControlMode
   cameraSensitivity: number
   musicMode: boolean
+  ghostEnabled: boolean
 }
 
 export interface LevelProgress {
@@ -85,6 +86,7 @@ export interface GameState {
   saveDailyResult: (dateKey: string, result: DailyResult) => void
   updateSettings: (partial: Partial<GameSettings>) => void
   toggleMusicMode: () => void
+  toggleGhost: () => void
   loadSavedProgress: () => void
   saveProgress: () => void
 }
@@ -121,6 +123,7 @@ const defaultSettings: GameSettings = {
   controlMode: ControlMode.Keyboard,
   cameraSensitivity: 1.0,
   musicMode: false,
+  ghostEnabled: true,
 }
 
 /** Calculate stars earned based on time thresholds */
@@ -259,6 +262,13 @@ export const useGameStore = create<GameState>((set, get) => {
     toggleMusicMode: () => {
       const state = get()
       const newSettings = { ...state.settings, musicMode: !state.settings.musicMode }
+      set({ settings: newSettings })
+      get().saveProgress()
+    },
+
+    toggleGhost: () => {
+      const state = get()
+      const newSettings = { ...state.settings, ghostEnabled: !state.settings.ghostEnabled }
       set({ settings: newSettings })
       get().saveProgress()
     },

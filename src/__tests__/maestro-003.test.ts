@@ -131,6 +131,7 @@ function disableMusicMode() {
     settings: {
       ...useGameStore.getState().settings,
       musicMode: false,
+      ghostEnabled: true,
     },
   })
 }
@@ -163,6 +164,7 @@ describe('Maestro-003: Music Mode Toggle, Visual Indicators, Ambient Harmonizati
         controlMode: 'keyboard',
         cameraSensitivity: 1.0,
         musicMode: false,
+        ghostEnabled: true,
       },
     })
 
