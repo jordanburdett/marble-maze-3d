@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody } from '@react-three/rapier'
 import type { Mesh } from 'three'
@@ -19,6 +19,13 @@ export function Gem({ position, index, collected, onCollect }: GemProps) {
   const meshRef = useRef<Mesh>(null)
   const bodyRef = useRef<RapierRigidBody>(null)
   const collectedRef = useRef(false)
+
+  // Reset collectedRef when the collected prop changes to false (level restart)
+  useEffect(() => {
+    if (!collected) {
+      collectedRef.current = false
+    }
+  }, [collected])
 
   useFrame((_state, delta) => {
     if (collected || collectedRef.current || !meshRef.current) return
