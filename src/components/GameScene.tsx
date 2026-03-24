@@ -17,6 +17,7 @@ import { trailPositions } from '../utils/trailState'
 import { cameraState, CameraPhase } from '../utils/cameraState'
 import { useInput } from '../hooks/useInput'
 import { useAudio, useAudioEvents } from '../hooks/useAudio'
+import { MusicEngine } from '../utils/MusicEngine'
 import { useGameStore, GameStatus } from '../store/gameStore'
 import type { Level } from '../data/levels'
 
@@ -132,6 +133,21 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   useAudio(isPlaying)
   const audio = useAudioEvents()
 
+  // World ID for music engine (clamp to valid range 1-3, default to 1)
+  const worldId = (Math.max(1, Math.min(3, level.world)) as 1 | 2 | 3)
+
+  // Music-aware knock: play musical note when musicMode on, always play SFX knock
+  const handleKnock = useCallback((velocity: number) => {
+    audio.playKnock(velocity)
+    MusicEngine.get().playMusicalKnock(velocity, worldId)
+  }, [audio, worldId])
+
+  // Music-aware roll: feed speed to MusicEngine for BPM tracking
+  const handleRoll = useCallback((speed: number) => {
+    audio.playRoll(speed)
+    MusicEngine.get().setMarbleSpeed(speed)
+  }, [audio])
+
   // Update timer and tilt each frame
   useFrame((state, delta) => {
     if (isPlaying) {
@@ -140,10 +156,11 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
-  // Reset trail and camera on level reset
+  // Reset trail, camera, and music note index on level reset
   useEffect(() => {
     trailPositions.reset()
     cameraState.resetForLevel()
+    MusicEngine.get().resetNoteIndex()
   }, [resetTrigger])
 
   // Reset camera on initial mount / level change
@@ -211,9 +228,9 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
         resetTrigger={resetTrigger}
         windZones={level.windZones}
         icePatches={level.icePatches}
-        onRoll={audio.playRoll}
+        onRoll={handleRoll}
         onStopRoll={audio.stopRoll}
-        onKnock={audio.playKnock}
+        onKnock={handleKnock}
       />
 
       {/* Marble trail */}
