@@ -142,11 +142,46 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     MusicEngine.get().playMusicalKnock(velocity, worldId)
   }, [audio, worldId])
 
-  // Music-aware roll: feed speed to MusicEngine for BPM tracking
+  // Music-aware roll: feed speed to MusicEngine for BPM tracking + start/update drone
   const handleRoll = useCallback((speed: number) => {
     audio.playRoll(speed)
-    MusicEngine.get().setMarbleSpeed(speed)
+    const music = MusicEngine.get()
+    music.setMarbleSpeed(speed)
+    // startMusicalRoll is idempotent — safe to call every frame
+    music.startMusicalRoll(worldId)
+    music.updateRollSpeed(speed)
+  }, [audio, worldId])
+
+  // Music-aware stop roll: stop bass drone
+  const handleStopRoll = useCallback(() => {
+    audio.stopRoll()
+    MusicEngine.get().stopMusicalRoll()
   }, [audio])
+
+  // Zone enter/leave callbacks for music engine
+  const handleEnterIce = useCallback(() => {
+    MusicEngine.get().startIcePad(worldId)
+  }, [worldId])
+
+  const handleLeaveIce = useCallback(() => {
+    MusicEngine.get().stopIcePad()
+  }, [])
+
+  const handleEnterWind = useCallback(() => {
+    MusicEngine.get().startWindArpeggio(worldId)
+  }, [worldId])
+
+  const handleLeaveWind = useCallback(() => {
+    MusicEngine.get().stopWindArpeggio()
+  }, [])
+
+  const handleEnterRotating = useCallback((speed: number) => {
+    MusicEngine.get().startRotatingRhythm(speed)
+  }, [])
+
+  const handleLeaveRotating = useCallback(() => {
+    MusicEngine.get().stopRotatingRhythm()
+  }, [])
 
   // Update timer and tilt each frame
   useFrame((state, delta) => {
@@ -156,11 +191,13 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
-  // Reset trail, camera, and music note index on level reset
+  // Reset trail, camera, and music on level reset
   useEffect(() => {
     trailPositions.reset()
     cameraState.resetForLevel()
-    MusicEngine.get().resetNoteIndex()
+    const music = MusicEngine.get()
+    music.resetNoteIndex()
+    music.stopAllZones()
   }, [resetTrigger])
 
   // Reset camera on initial mount / level change
@@ -176,6 +213,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     if (failTimeoutRef.current) return
     audio.playTrapFall()
     audio.stopRoll()
+    MusicEngine.get().stopAllZones()
     cameraState.setPhase(CameraPhase.TrapZoom)
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
@@ -188,6 +226,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     if (failTimeoutRef.current) return
     audio.playTrapFall()
     audio.stopRoll()
+    MusicEngine.get().stopAllZones()
     cameraState.setPhase(CameraPhase.TrapZoom)
     onLevelFail()
     failTimeoutRef.current = setTimeout(() => {
@@ -199,6 +238,7 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   const handleGoalReach = useCallback(() => {
     audio.playGoalReached()
     audio.stopRoll()
+    MusicEngine.get().stopAllZones()
     cameraState.setPhase(CameraPhase.Victory)
     emitGoalFountain(level.goalPosition[0], 0.5, level.goalPosition[1])
     onLevelComplete()
@@ -228,9 +268,16 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
         resetTrigger={resetTrigger}
         windZones={level.windZones}
         icePatches={level.icePatches}
+        rotatingSegments={level.rotatingSegments}
         onRoll={handleRoll}
-        onStopRoll={audio.stopRoll}
+        onStopRoll={handleStopRoll}
         onKnock={handleKnock}
+        onEnterIce={handleEnterIce}
+        onLeaveIce={handleLeaveIce}
+        onEnterWind={handleEnterWind}
+        onLeaveWind={handleLeaveWind}
+        onEnterRotating={handleEnterRotating}
+        onLeaveRotating={handleLeaveRotating}
       />
 
       {/* Marble trail */}
