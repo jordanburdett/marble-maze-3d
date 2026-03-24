@@ -12,10 +12,13 @@ import { RotatingSegment } from './RotatingSegment'
 import { WindZone } from './WindZone'
 import { ConnectedParticleSystem } from './Particles'
 import { MarbleTrail } from './MarbleTrail'
+import { GhostMarble } from './GhostMarble'
+import { GhostTrail } from './GhostTrail'
 import { emitGemCollect, emitGoalFountain } from '../utils/particleState'
 import { trailPositions } from '../utils/trailState'
 import { trajectoryRecorder } from '../utils/trajectoryRecorder'
 import { ghostStorage } from '../utils/ghostStorage'
+import { ghostState } from '../utils/ghostState'
 import { cameraState, CameraPhase } from '../utils/cameraState'
 import { useInput } from '../hooks/useInput'
 import { useAudio, useAudioEvents } from '../hooks/useAudio'
@@ -24,6 +27,7 @@ import { MusicEngine } from '../utils/MusicEngine'
 import { wallGlowState } from '../utils/wallGlowState'
 import { useGameStore, GameStatus } from '../store/gameStore'
 import type { Level } from '../data/levels'
+import type { TrajectoryFrame } from '../utils/trajectoryRecorder'
 
 /** Create gradient texture for background */
 function createGradientTexture(topColor: string, bottomColor: string): THREE.CanvasTexture {
@@ -127,12 +131,17 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
   const collectGem = useGameStore(s => s.collectGem)
   const startTimer = useGameStore(s => s.startTimer)
   const updateTimer = useGameStore(s => s.updateTimer)
+  const timer = useGameStore(s => s.timer)
   const musicMode = useGameStore(s => s.settings.musicMode)
+  const ghostEnabled = useGameStore(s => s.settings.ghostEnabled)
 
   const isPlaying = gameStatus === GameStatus.Playing
   const { tiltRef, updateTilt } = useInput(isPlaying)
   const [resetTrigger, setResetTrigger] = useState(0)
   const failTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Ghost trajectory state — loaded from ghostStorage on level start/reset
+  const [ghostTrajectory, setGhostTrajectory] = useState<TrajectoryFrame[] | null>(null)
 
   // Audio hooks
   useAudio(isPlaying)
@@ -221,7 +230,20 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     }
   })
 
-  // Reset trail, camera, music, and trajectory recording on level reset
+  // Load ghost trajectory for current level
+  const loadGhostTrajectory = useCallback(() => {
+    ghostState.reset()
+    if (ghostEnabled) {
+      const ghost = ghostStorage.loadGhost(level.id)
+      if (ghost) {
+        setGhostTrajectory(ghost.trajectory)
+        return
+      }
+    }
+    setGhostTrajectory(null)
+  }, [ghostEnabled, level.id])
+
+  // Reset trail, camera, music, ghost, and trajectory recording on level reset
   useEffect(() => {
     trailPositions.reset()
     trajectoryRecorder.clear()
@@ -231,14 +253,16 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
     music.resetNoteIndex()
     music.stopAllZones()
     wallGlowState.reset()
-  }, [resetTrigger])
+    loadGhostTrajectory()
+  }, [resetTrigger, loadGhostTrajectory])
 
   // Reset camera and start recording on initial mount / level change
   useEffect(() => {
     cameraState.resetForLevel()
     trajectoryRecorder.clear()
     trajectoryRecorder.startRecording()
-  }, [level.id])
+    loadGhostTrajectory()
+  }, [level.id, loadGhostTrajectory])
 
   const handleStartMoving = useCallback(() => {
     startTimer()
@@ -330,6 +354,20 @@ function GameWorld({ level, onLevelComplete, onLevelFail }: GameWorldProps) {
 
       {/* Marble trail */}
       <MarbleTrail worldId={level.world} />
+
+      {/* Ghost marble replay */}
+      {ghostEnabled && ghostTrajectory && ghostTrajectory.length > 0 && (
+        <>
+          <GhostMarble
+            trajectory={ghostTrajectory}
+            worldId={level.world}
+            ghostEnabled={ghostEnabled}
+            gameStatus={gameStatus}
+            timer={timer}
+          />
+          <GhostTrail worldId={level.world} />
+        </>
+      )}
 
       {/* Particle system */}
       <ConnectedParticleSystem />

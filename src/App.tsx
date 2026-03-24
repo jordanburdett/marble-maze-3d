@@ -14,6 +14,8 @@ import { SettingsScreen } from './components/SettingsScreen'
 import { VirtualJoystick } from './components/VirtualJoystick'
 import { TiltController } from './components/TiltController'
 import { useGameStore, GameMode, GameStatus, ControlMode } from './store/gameStore'
+import { ghostStorage } from './utils/ghostStorage'
+import { ghostState } from './utils/ghostState'
 import { getLevel, ALL_LEVELS } from './data/levels'
 import {
   generateDailyMaze,
@@ -62,6 +64,36 @@ export default function App() {
   // Track the daily result for display
   const [dailyGemCount, setDailyGemCount] = useState(0)
   const [dailyTime, setDailyTime] = useState(0)
+
+  // Ghost marble HUD state
+  const ghostEnabled = useGameStore(s => s.settings.ghostEnabled)
+  const [ghostBestTime, setGhostBestTime] = useState<number | null>(null)
+  const [ghostFinished, setGhostFinished] = useState(false)
+  const ghostFinishedRef = useRef(false)
+
+  // Load ghost best time when level changes
+  useEffect(() => {
+    if (activeLevel && ghostEnabled) {
+      const ghost = ghostStorage.loadGhost(activeLevel.id)
+      setGhostBestTime(ghost?.time ?? null)
+    } else {
+      setGhostBestTime(null)
+    }
+    setGhostFinished(false)
+    ghostFinishedRef.current = false
+  }, [activeLevel, ghostEnabled, gameStatus])
+
+  // Poll ghostState.finished to detect when ghost finishes (driven by useFrame inside Canvas)
+  useEffect(() => {
+    if (gameStatus !== GameStatus.Playing || !ghostEnabled || !activeLevel) return
+    const interval = setInterval(() => {
+      if (ghostState.finished && !ghostFinishedRef.current) {
+        ghostFinishedRef.current = true
+        setGhostFinished(true)
+      }
+    }, 100)
+    return () => clearInterval(interval)
+  }, [gameStatus, ghostEnabled, activeLevel])
 
   const mobile = isMobileDevice()
 
@@ -316,7 +348,12 @@ export default function App() {
         onLevelFail={handleLevelFail}
       />
 
-      <GameHUD level={activeLevel} onPause={pauseGame} />
+      <GameHUD
+        level={activeLevel}
+        onPause={pauseGame}
+        ghostBestTime={ghostBestTime}
+        ghostFinished={ghostFinished}
+      />
 
       {/* Virtual joystick for mobile */}
       {mobile && controlMode === ControlMode.Joystick && gameStatus === GameStatus.Playing && (

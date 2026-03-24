@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore, calculateStars, GameMode } from '../store/gameStore'
 import type { Level } from '../data/levels'
 import { TOTAL_LEVEL_COUNT, ALL_LEVELS } from '../data/levels'
@@ -84,11 +84,30 @@ export function MenuScreen({ onStartCampaign, onStartDaily, onStartFreeplay, onS
 interface HUDProps {
   level: Level
   onPause: () => void
+  ghostBestTime?: number | null
+  ghostFinished?: boolean
 }
 
-export function GameHUD({ level, onPause }: HUDProps) {
+/** Duration to show "Ghost finished!" flash (seconds) */
+const GHOST_FLASH_DURATION = 2.0
+
+export function GameHUD({ level, onPause, ghostBestTime, ghostFinished }: HUDProps) {
   const timer = useGameStore(s => s.timer)
   const gemsCollected = useGameStore(s => s.gemsCollected)
+  const [showGhostFlash, setShowGhostFlash] = useState(false)
+
+  // Flash "Ghost finished!" for 2 seconds when ghost finishes
+  useEffect(() => {
+    if (ghostFinished) {
+      setShowGhostFlash(true)
+      const timeout = setTimeout(() => {
+        setShowGhostFlash(false)
+      }, GHOST_FLASH_DURATION * 1000)
+      return () => clearTimeout(timeout)
+    } else {
+      setShowGhostFlash(false)
+    }
+  }, [ghostFinished])
 
   return (
     <div style={hudContainerStyle} role="status" aria-label="Game HUD">
@@ -114,6 +133,14 @@ export function GameHUD({ level, onPause }: HUDProps) {
           </span>
         ))}
       </div>
+      {ghostBestTime != null && ghostBestTime > 0 && (
+        <div style={ghostInfoStyle} aria-label="Ghost best time">
+          <span style={ghostTimeStyle}>Ghost: {formatTime(ghostBestTime)}</span>
+          {showGhostFlash && (
+            <span style={ghostFlashStyle}>Ghost finished!</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -581,4 +608,26 @@ const replayLevelStyle: React.CSSProperties = {
   borderRadius: '10px',
   cursor: 'pointer',
   color: '#fff',
+}
+
+const ghostInfoStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '12px',
+  marginTop: '4px',
+}
+
+const ghostTimeStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 500,
+  color: 'rgba(255,215,0,0.7)',
+  fontVariantNumeric: 'tabular-nums',
+}
+
+const ghostFlashStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 600,
+  color: '#FFD700',
+  textShadow: '0 0 8px rgba(255,215,0,0.5)',
 }
