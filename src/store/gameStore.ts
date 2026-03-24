@@ -33,6 +33,7 @@ export interface GameSettings {
   sfxVolume: number
   controlMode: ControlMode
   cameraSensitivity: number
+  musicMode: boolean
 }
 
 export interface LevelProgress {
@@ -83,6 +84,7 @@ export interface GameState {
   setCurrentWorld: (world: number) => void
   saveDailyResult: (dateKey: string, result: DailyResult) => void
   updateSettings: (partial: Partial<GameSettings>) => void
+  toggleMusicMode: () => void
   loadSavedProgress: () => void
   saveProgress: () => void
 }
@@ -118,6 +120,7 @@ const defaultSettings: GameSettings = {
   sfxVolume: 1.0,
   controlMode: ControlMode.Keyboard,
   cameraSensitivity: 1.0,
+  musicMode: false,
 }
 
 /** Calculate stars earned based on time thresholds */
@@ -249,6 +252,13 @@ export const useGameStore = create<GameState>((set, get) => {
     updateSettings: (partial: Partial<GameSettings>) => {
       const state = get()
       const newSettings = { ...state.settings, ...partial }
+      set({ settings: newSettings })
+      get().saveProgress()
+    },
+
+    toggleMusicMode: () => {
+      const state = get()
+      const newSettings = { ...state.settings, musicMode: !state.settings.musicMode }
       set({ settings: newSettings })
       get().saveProgress()
     },
