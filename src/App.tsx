@@ -2,23 +2,41 @@ import { useCallback, useEffect, useState } from 'react'
 import { GameScene } from './components/GameScene'
 import {
   MenuScreen,
-  LevelSelectScreen,
   GameHUD,
   PauseOverlay,
   LevelCompleteOverlay,
   LevelFailedOverlay,
+  FreePlaySelect,
 } from './components/HUD'
+import { CampaignMap } from './components/CampaignMap'
+import { DailyResult } from './components/DailyResult'
 import { useGameStore, GameMode, GameStatus } from './store/gameStore'
-import { getLevel, WORLD_1_LEVEL_COUNT } from './data/levels'
+import { getLevel, ALL_LEVELS } from './data/levels'
+import {
+  generateDailyMaze,
+  generateFreePlayMaze,
+  hasDailyBeenPlayed,
+  markDailyPlayed,
+  getTodayKey,
+} from './utils/mazeGenerator'
+import type { Level } from './data/levels'
+import type { MazeSize } from './utils/mazeGenerator'
 
-type Screen = 'menu' | 'levelSelect' | 'playing'
+const Screen = {
+  Menu: 'menu',
+  CampaignMap: 'campaignMap',
+  FreePlaySelect: 'freePlaySelect',
+  Playing: 'playing',
+  DailyResult: 'dailyResult',
+} as const
+type Screen = (typeof Screen)[keyof typeof Screen]
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('menu')
+  const [screen, setScreen] = useState<Screen>(Screen.Menu)
+  const [activeLevel, setActiveLevel] = useState<Level | null>(null)
 
   const gameMode = useGameStore(s => s.gameMode)
   const gameStatus = useGameStore(s => s.gameStatus)
-  const currentLevel = useGameStore(s => s.currentLevel)
   const setGameMode = useGameStore(s => s.setGameMode)
   const startLevel = useGameStore(s => s.startLevel)
   const resetLevel = useGameStore(s => s.resetLevel)
@@ -27,9 +45,13 @@ export default function App() {
   const pauseGame = useGameStore(s => s.pauseGame)
   const resumeGame = useGameStore(s => s.resumeGame)
   const timer = useGameStore(s => s.timer)
+  const gemsCollected = useGameStore(s => s.gemsCollected)
+  const saveDailyResult = useGameStore(s => s.saveDailyResult)
   const loadSavedProgress = useGameStore(s => s.loadSavedProgress)
 
-  const level = getLevel(currentLevel)
+  // Track the daily result for display
+  const [dailyGemCount, setDailyGemCount] = useState(0)
+  const [dailyTime, setDailyTime] = useState(0)
 
   // Load saved progress on mount
   useEffect(() => {
@@ -51,38 +73,95 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [gameStatus, pauseGame, resumeGame])
 
+  // --- Navigation handlers ---
+
   const handleStartCampaign = useCallback(() => {
     setGameMode(GameMode.Campaign)
-    setScreen('levelSelect')
+    setScreen(Screen.CampaignMap)
   }, [setGameMode])
 
-  const handleSelectLevel = useCallback((id: number) => {
-    startLevel(id)
-    setScreen('playing')
+  const handleStartDaily = useCallback(() => {
+    if (hasDailyBeenPlayed()) {
+      // Already played today — still allow viewing
+    }
+    setGameMode(GameMode.Daily)
+    const maze = generateDailyMaze()
+    setActiveLevel(maze)
+    startLevel(maze.id)
+    setScreen(Screen.Playing)
+  }, [setGameMode, startLevel])
+
+  const handleStartFreeplay = useCallback(() => {
+    setGameMode(GameMode.Freeplay)
+    setScreen(Screen.FreePlaySelect)
+  }, [setGameMode])
+
+  const handleSelectCampaignLevel = useCallback((id: number) => {
+    const level = getLevel(id)
+    if (level) {
+      setActiveLevel(level)
+      startLevel(id)
+      setScreen(Screen.Playing)
+    }
+  }, [startLevel])
+
+  const handleFreeplayLevel = useCallback((id: number) => {
+    const level = getLevel(id)
+    if (level) {
+      setActiveLevel(level)
+      startLevel(id)
+      setScreen(Screen.Playing)
+    }
+  }, [startLevel])
+
+  const handleFreeplayRandom = useCallback((size: MazeSize) => {
+    const maze = generateFreePlayMaze(size)
+    setActiveLevel(maze)
+    startLevel(maze.id)
+    setScreen(Screen.Playing)
   }, [startLevel])
 
   const handleLevelComplete = useCallback(() => {
-    if (gameStatus !== GameStatus.Playing || !level) return
-    completeLevel(timer, level.starThresholds)
-  }, [completeLevel, timer, gameStatus, level])
+    if (gameStatus !== GameStatus.Playing || !activeLevel) return
+
+    if (gameMode === GameMode.Daily) {
+      // Save daily result
+      const gemCount = gemsCollected.filter(Boolean).length
+      setDailyGemCount(gemCount)
+      setDailyTime(timer)
+      saveDailyResult(getTodayKey(), {
+        time: timer,
+        stars: 0,
+        gemsCollected: gemCount,
+      })
+      markDailyPlayed()
+      completeLevel(timer, activeLevel.starThresholds)
+      setScreen(Screen.DailyResult)
+    } else {
+      completeLevel(timer, activeLevel.starThresholds)
+    }
+  }, [completeLevel, timer, gameStatus, activeLevel, gameMode, gemsCollected, saveDailyResult])
 
   const handleLevelFail = useCallback(() => {
     if (gameStatus !== GameStatus.Playing) return
     failLevel()
-    // Auto-reset after 1 second (handled in GameScene via resetTrigger)
+    // Auto-reset after 1 second
     setTimeout(() => {
       resetLevel()
     }, 1000)
   }, [failLevel, resetLevel, gameStatus])
 
   const handleNextLevel = useCallback(() => {
-    const nextId = currentLevel + 1
-    if (nextId <= WORLD_1_LEVEL_COUNT) {
+    if (!activeLevel) return
+    const nextId = activeLevel.id + 1
+    const nextLevel = ALL_LEVELS.find(l => l.id === nextId)
+    if (nextLevel) {
+      setActiveLevel(nextLevel)
       startLevel(nextId)
     } else {
-      setScreen('levelSelect')
+      setScreen(Screen.CampaignMap)
     }
-  }, [currentLevel, startLevel])
+  }, [activeLevel, startLevel])
 
   const handleRestart = useCallback(() => {
     resetLevel()
@@ -90,30 +169,61 @@ export default function App() {
 
   const handleBackToMenu = useCallback(() => {
     setGameMode(GameMode.Menu)
-    setScreen('menu')
+    setActiveLevel(null)
+    setScreen(Screen.Menu)
   }, [setGameMode])
 
   const handleResume = useCallback(() => {
     resumeGame()
   }, [resumeGame])
 
+  // --- Screen rendering ---
+
   // Menu screen
-  if (screen === 'menu' || gameMode === GameMode.Menu) {
-    return <MenuScreen onStartCampaign={handleStartCampaign} />
+  if (screen === Screen.Menu || gameMode === GameMode.Menu) {
+    return (
+      <MenuScreen
+        onStartCampaign={handleStartCampaign}
+        onStartDaily={handleStartDaily}
+        onStartFreeplay={handleStartFreeplay}
+      />
+    )
   }
 
-  // Level select screen
-  if (screen === 'levelSelect') {
+  // Campaign map
+  if (screen === Screen.CampaignMap) {
     return (
-      <LevelSelectScreen
-        onSelectLevel={handleSelectLevel}
+      <CampaignMap
+        onSelectLevel={handleSelectCampaignLevel}
         onBack={handleBackToMenu}
       />
     )
   }
 
+  // Free play select
+  if (screen === Screen.FreePlaySelect) {
+    return (
+      <FreePlaySelect
+        onSelectCampaignLevel={handleFreeplayLevel}
+        onGenerateRandom={handleFreeplayRandom}
+        onBack={handleBackToMenu}
+      />
+    )
+  }
+
+  // Daily result screen
+  if (screen === Screen.DailyResult) {
+    return (
+      <DailyResult
+        time={dailyTime}
+        gemsCollected={dailyGemCount}
+        onMenu={handleBackToMenu}
+      />
+    )
+  }
+
   // Game screen
-  if (!level) {
+  if (!activeLevel) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         <p>Level not found</p>
@@ -124,12 +234,12 @@ export default function App() {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <GameScene
-        level={level}
+        level={activeLevel}
         onLevelComplete={handleLevelComplete}
         onLevelFail={handleLevelFail}
       />
 
-      <GameHUD level={level} onPause={pauseGame} />
+      <GameHUD level={activeLevel} onPause={pauseGame} />
 
       {gameStatus === GameStatus.Paused && (
         <PauseOverlay
@@ -139,9 +249,9 @@ export default function App() {
         />
       )}
 
-      {gameStatus === GameStatus.Complete && (
+      {gameStatus === GameStatus.Complete && gameMode !== GameMode.Daily && (
         <LevelCompleteOverlay
-          level={level}
+          level={activeLevel}
           onNextLevel={handleNextLevel}
           onRestart={handleRestart}
           onMenu={handleBackToMenu}
