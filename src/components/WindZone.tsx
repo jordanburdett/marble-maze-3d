@@ -25,9 +25,9 @@ export function WindZone({ def }: WindZoneProps) {
   }, [def.direction])
 
   // Animate arrow opacity for "flowing" effect
-  useFrame(() => {
+  useFrame((state) => {
     if (!arrowsRef.current) return
-    const t = Date.now() * 0.001 * ARROW_SPEED
+    const t = state.clock.elapsedTime * ARROW_SPEED
     arrowsRef.current.children.forEach((child, i) => {
       const mesh = child as THREE.Mesh
       const mat = mesh.material as THREE.MeshBasicMaterial
