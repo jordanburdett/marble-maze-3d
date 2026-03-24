@@ -4,7 +4,7 @@ import { RigidBody } from '@react-three/rapier'
 import { Environment } from '@react-three/drei'
 import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
-import type { WindZoneDef, IcePatchDef } from '../data/levels'
+import type { WindZoneDef, IcePatchDef, RotatingSegmentDef } from '../data/levels'
 import { trailPositions } from '../utils/trailState'
 import { cameraState, CameraPhase } from '../utils/cameraState'
 import { prefersReducedMotion } from '../hooks/useReducedMotion'
@@ -24,9 +24,16 @@ interface MarbleProps {
   resetTrigger: number
   windZones?: WindZoneDef[]
   icePatches?: IcePatchDef[]
+  rotatingSegments?: RotatingSegmentDef[]
   onRoll?: (speed: number) => void
   onStopRoll?: () => void
   onKnock?: (velocity: number) => void
+  onEnterIce?: () => void
+  onLeaveIce?: () => void
+  onEnterWind?: () => void
+  onLeaveWind?: () => void
+  onEnterRotating?: (speed: number) => void
+  onLeaveRotating?: () => void
 }
 
 /** Check if a point [x,z] is inside a rectangular zone */
@@ -41,13 +48,35 @@ function isInsideRect(
   )
 }
 
-export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, windZones, icePatches, onRoll, onStopRoll, onKnock }: MarbleProps) {
+/** Check if a point [x,z] is inside a circular zone */
+function isInsideCircle(
+  px: number, pz: number,
+  cx: number, cz: number,
+  radius: number,
+): boolean {
+  const dx = px - cx
+  const dz = pz - cz
+  return dx * dx + dz * dz <= radius * radius
+}
+
+export function Marble({
+  startPosition, onFallOff, onStartMoving, resetTrigger,
+  windZones, icePatches, rotatingSegments,
+  onRoll, onStopRoll, onKnock,
+  onEnterIce, onLeaveIce, onEnterWind, onLeaveWind,
+  onEnterRotating, onLeaveRotating,
+}: MarbleProps) {
   const bodyRef = useRef<RapierRigidBody>(null)
   const hasStartedMoving = useRef(false)
   const hasFallenOff = useRef(false)
   const cameraTarget = useRef(new THREE.Vector3(startPosition[0], 0, startPosition[1]))
   const prevSpeed = useRef(0)
   const wasRolling = useRef(false)
+
+  // Zone tracking refs for enter/leave detection
+  const wasOnIce = useRef(false)
+  const wasInWind = useRef(false)
+  const wasOnRotating = useRef(false)
 
   // Reusable Vector3 objects — hoisted to avoid per-frame allocation
   const tempMarbleXZ = useRef(new THREE.Vector3())
@@ -67,6 +96,9 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
     hasFallenOff.current = false
     prevSpeed.current = 0
     wasRolling.current = false
+    wasOnIce.current = false
+    wasInWind.current = false
+    wasOnRotating.current = false
     cameraTarget.current.set(startPosition[0], 0, startPosition[1])
   }, [resetTrigger, startPosition])
 
@@ -113,12 +145,16 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
     // --- Trail position update ---
     trailPositions.update(pos.x, pos.y, pos.z)
 
-    // Apply wind zone forces
+    // --- Zone detection with enter/leave callbacks ---
+
+    // Wind zone detection + force application
+    let inWind = false
     if (windZones) {
       for (const wz of windZones) {
         const hw = wz.size[0] / 2
         const hd = wz.size[1] / 2
         if (isInsideRect(pos.x, pos.z, wz.position[0], wz.position[1], hw, hd)) {
+          inWind = true
           body.applyImpulse(
             {
               x: wz.direction[0] * wz.strength * delta,
@@ -131,9 +167,17 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
       }
     }
 
-    // Adjust damping for ice patches
+    // Wind zone enter/leave
+    if (inWind && !wasInWind.current) {
+      if (onEnterWind) onEnterWind()
+    } else if (!inWind && wasInWind.current) {
+      if (onLeaveWind) onLeaveWind()
+    }
+    wasInWind.current = inWind
+
+    // Ice patch detection + damping adjustment
+    let onIce = false
     if (icePatches) {
-      let onIce = false
       for (const ip of icePatches) {
         const hw = ip.size[0] / 2
         const hd = ip.size[1] / 2
@@ -144,6 +188,35 @@ export function Marble({ startPosition, onFallOff, onStartMoving, resetTrigger, 
       }
       body.setLinearDamping(onIce ? ICE_DAMPING : NORMAL_DAMPING)
     }
+
+    // Ice zone enter/leave
+    if (onIce && !wasOnIce.current) {
+      if (onEnterIce) onEnterIce()
+    } else if (!onIce && wasOnIce.current) {
+      if (onLeaveIce) onLeaveIce()
+    }
+    wasOnIce.current = onIce
+
+    // Rotating segment detection (circular zone check)
+    let onRotating = false
+    let rotatingSpeed = 0
+    if (rotatingSegments) {
+      for (const rs of rotatingSegments) {
+        if (isInsideCircle(pos.x, pos.z, rs.position[0], rs.position[1], rs.radius)) {
+          onRotating = true
+          rotatingSpeed = rs.speed
+          break
+        }
+      }
+    }
+
+    // Rotating zone enter/leave
+    if (onRotating && !wasOnRotating.current) {
+      if (onEnterRotating) onEnterRotating(rotatingSpeed)
+    } else if (!onRotating && wasOnRotating.current) {
+      if (onLeaveRotating) onLeaveRotating()
+    }
+    wasOnRotating.current = onRotating
 
     // --- Camera transition logic ---
     cameraState.tick(delta)
