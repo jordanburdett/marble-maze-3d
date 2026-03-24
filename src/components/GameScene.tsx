@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useMemo } from 'react'
+import { useRef, useCallback, useState, useMemo, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { AdaptiveDpr } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
@@ -28,14 +28,20 @@ function createGradientTexture(): THREE.CanvasTexture {
 
 /** Background gradient + decorative spheres */
 function Background() {
-  const backgroundSet = useRef(false)
+  const texture = useMemo(() => createGradientTexture(), [])
 
   useFrame(({ scene }) => {
-    if (!backgroundSet.current) {
-      backgroundSet.current = true
-      scene.background = createGradientTexture()
+    if (scene.background !== texture) {
+      scene.background = texture
     }
   })
+
+  // Dispose the canvas texture on unmount to free GPU memory
+  useEffect(() => {
+    return () => {
+      texture.dispose()
+    }
+  }, [texture])
 
   return null
 }
