@@ -1,6 +1,6 @@
 import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { RigidBody } from '@react-three/rapier'
+import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import * as THREE from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import type { Level } from '../data/levels'
@@ -86,18 +86,22 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
     }
   })
 
+  // Reusable objects for tilt calculation — hoisted to avoid per-frame allocation
+  const tiltQuat = useRef(new THREE.Quaternion())
+  const tiltEuler = useRef(new THREE.Euler(0, 0, 0, 'XYZ'))
+
   // Update board tilt each physics frame
   useFrame(() => {
     if (!boardRef.current || !enabled) return
     const tilt = tiltRef.current
     if (!tilt) return
 
-    const quat = new THREE.Quaternion()
-    const euler = new THREE.Euler(tilt.tiltX, 0, tilt.tiltZ, 'XYZ')
-    quat.setFromEuler(euler)
+    tiltEuler.current.set(tilt.tiltX, 0, tilt.tiltZ, 'XYZ')
+    tiltQuat.current.setFromEuler(tiltEuler.current)
 
+    const q = tiltQuat.current
     boardRef.current.setNextKinematicRotation(
-      { x: quat.x, y: quat.y, z: quat.z, w: quat.w },
+      { x: q.x, y: q.y, z: q.z, w: q.w },
     )
   })
 
@@ -114,10 +118,11 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
         <meshStandardMaterial color="#E8D5B7" roughness={0.8} metalness={0.05} />
       </mesh>
 
-      {/* Floor collider */}
-      <mesh visible={false}>
-        <boxGeometry args={[boardW, FLOOR_THICKNESS, boardD]} />
-      </mesh>
+      {/* Floor collider — explicit CuboidCollider so Rapier generates physics shapes */}
+      <CuboidCollider
+        args={[boardW / 2, FLOOR_THICKNESS / 2, boardD / 2]}
+        position={[0, -FLOOR_THICKNESS / 2, 0]}
+      />
 
       {/* Wall instances using InstancedMesh for performance */}
       {wallMatrices.length > 0 && (
@@ -136,11 +141,13 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
         </instancedMesh>
       )}
 
-      {/* Individual wall colliders (physics needs individual shapes) */}
+      {/* Individual wall colliders — explicit CuboidColliders for physics */}
       {wallBoxes.map((box, i) => (
-        <mesh key={`wall-col-${i}`} position={box.position} visible={false}>
-          <boxGeometry args={box.scale} />
-        </mesh>
+        <CuboidCollider
+          key={`wall-col-${i}`}
+          args={[box.scale[0] / 2, box.scale[1] / 2, box.scale[2] / 2]}
+          position={box.position}
+        />
       ))}
 
       {/* Ambient occlusion strips at wall bases */}
@@ -210,8 +217,6 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
         </group>
       ))}
 
-      {/* Colliders for the board - we use a trimesh approach via cuboid colliders */}
-      {/* The floor and walls are part of this kinematic body, so rapier auto-generates colliders from child meshes when using "trimesh" or we add them manually */}
     </RigidBody>
   )
 }
@@ -220,15 +225,17 @@ export function MazeBoard({ level, tiltRef, enabled }: MazeBoardProps) {
 export function GoalSensor({
   position,
   onGoalReach,
+  resetTrigger,
 }: {
   position: [number, number]
   onGoalReach: () => void
+  resetTrigger?: number
 }) {
   const reachedRef = useRef(false)
 
   useEffect(() => {
     reachedRef.current = false
-  }, [position])
+  }, [position, resetTrigger])
 
   return (
     <RigidBody
