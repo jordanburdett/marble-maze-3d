@@ -1,7 +1,9 @@
-import { useGameStore, ControlMode } from '../store/gameStore'
+import { useGameStore, ControlMode, GameMode } from '../store/gameStore'
 import type { GameSettings } from '../store/gameStore'
 import { isMobileDevice } from '../hooks/useTiltControls'
 import { AudioEngine } from '../utils/AudioEngine'
+import { ghostStorage } from '../utils/ghostStorage'
+import { MusicEngine } from '../utils/MusicEngine'
 
 interface SettingsScreenProps {
   onBack: () => void
@@ -11,7 +13,13 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
   const settings = useGameStore(s => s.settings)
   const updateSettings = useGameStore(s => s.updateSettings)
   const toggleMusicMode = useGameStore(s => s.toggleMusicMode)
+  const toggleGhost = useGameStore(s => s.toggleGhost)
+  const gameMode = useGameStore(s => s.gameMode)
+  const currentLevel = useGameStore(s => s.currentLevel)
   const mobile = isMobileDevice()
+
+  // Show ghost toggle when ghost data exists for current campaign level
+  const showGhostToggle = gameMode === GameMode.Campaign && ghostStorage.hasGhost(currentLevel)
 
   const handleMusicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value)
@@ -21,6 +29,14 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
 
   const handleSfxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     updateSettings({ sfxVolume: parseFloat(e.target.value) })
+  }
+
+  const handleGhostToggle = () => {
+    toggleGhost()
+    // Stop ghost music immediately when disabling
+    if (settings.ghostEnabled) {
+      MusicEngine.get().stopAllGhostMusic()
+    }
   }
 
   const handleSensitivityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,6 +130,40 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
           </div>
           <span style={tooltipStyle}>
             Transform wall hits and zones into music
+          </span>
+        </div>
+      )}
+
+      {/* Ghost Replay toggle — show when ghost data exists for current campaign level */}
+      {showGhostToggle && (
+        <div style={sectionStyle}>
+          <div style={toggleRowStyle}>
+            <label style={labelStyle} htmlFor="ghost-toggle">
+              Ghost Replay
+            </label>
+            <button
+              id="ghost-toggle"
+              role="switch"
+              aria-checked={settings.ghostEnabled}
+              aria-label="Ghost Replay"
+              onClick={handleGhostToggle}
+              style={{
+                ...toggleStyle,
+                background: settings.ghostEnabled
+                  ? 'linear-gradient(135deg, #FFD700, #FFA500)'
+                  : 'rgba(255,255,255,0.15)',
+              }}
+            >
+              <span
+                style={{
+                  ...toggleKnobStyle,
+                  transform: settings.ghostEnabled ? 'translateX(20px)' : 'translateX(0)',
+                }}
+              />
+            </button>
+          </div>
+          <span style={tooltipStyle}>
+            Race against your best time
           </span>
         </div>
       )}
