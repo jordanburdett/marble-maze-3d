@@ -1,121 +1,159 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useCallback, useEffect, useState } from 'react'
+import { GameScene } from './components/GameScene'
+import {
+  MenuScreen,
+  LevelSelectScreen,
+  GameHUD,
+  PauseOverlay,
+  LevelCompleteOverlay,
+  LevelFailedOverlay,
+} from './components/HUD'
+import { useGameStore, GameMode, GameStatus } from './store/gameStore'
+import { getLevel, WORLD_1_LEVEL_COUNT } from './data/levels'
 
-function App() {
-  const [count, setCount] = useState(0)
+type Screen = 'menu' | 'levelSelect' | 'playing'
+
+export default function App() {
+  const [screen, setScreen] = useState<Screen>('menu')
+
+  const gameMode = useGameStore(s => s.gameMode)
+  const gameStatus = useGameStore(s => s.gameStatus)
+  const currentLevel = useGameStore(s => s.currentLevel)
+  const setGameMode = useGameStore(s => s.setGameMode)
+  const startLevel = useGameStore(s => s.startLevel)
+  const resetLevel = useGameStore(s => s.resetLevel)
+  const completeLevel = useGameStore(s => s.completeLevel)
+  const failLevel = useGameStore(s => s.failLevel)
+  const pauseGame = useGameStore(s => s.pauseGame)
+  const resumeGame = useGameStore(s => s.resumeGame)
+  const timer = useGameStore(s => s.timer)
+  const loadSavedProgress = useGameStore(s => s.loadSavedProgress)
+
+  const level = getLevel(currentLevel)
+
+  // Load saved progress on mount
+  useEffect(() => {
+    loadSavedProgress()
+  }, [loadSavedProgress])
+
+  // Escape key to pause
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (gameStatus === GameStatus.Playing) {
+          pauseGame()
+        } else if (gameStatus === GameStatus.Paused) {
+          resumeGame()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [gameStatus, pauseGame, resumeGame])
+
+  const handleStartCampaign = useCallback(() => {
+    setGameMode(GameMode.Campaign)
+    setScreen('levelSelect')
+  }, [setGameMode])
+
+  const handleSelectLevel = useCallback((id: number) => {
+    startLevel(id)
+    setScreen('playing')
+  }, [startLevel])
+
+  const handleLevelComplete = useCallback(() => {
+    if (gameStatus !== GameStatus.Playing) return
+    completeLevel(timer)
+  }, [completeLevel, timer, gameStatus])
+
+  const handleLevelFail = useCallback(() => {
+    if (gameStatus !== GameStatus.Playing) return
+    failLevel()
+    // Auto-reset after 1 second (handled in GameScene via resetTrigger)
+    setTimeout(() => {
+      resetLevel()
+    }, 1000)
+  }, [failLevel, resetLevel, gameStatus])
+
+  const handleNextLevel = useCallback(() => {
+    const nextId = currentLevel + 1
+    if (nextId <= WORLD_1_LEVEL_COUNT) {
+      startLevel(nextId)
+    } else {
+      setScreen('levelSelect')
+    }
+  }, [currentLevel, startLevel])
+
+  const handleRestart = useCallback(() => {
+    resetLevel()
+  }, [resetLevel])
+
+  const handleBackToMenu = useCallback(() => {
+    setGameMode(GameMode.Menu)
+    setScreen('menu')
+  }, [setGameMode])
+
+  const handleResume = useCallback(() => {
+    resumeGame()
+  }, [resumeGame])
+
+  // Menu screen
+  if (screen === 'menu' || gameMode === GameMode.Menu) {
+    return <MenuScreen onStartCampaign={handleStartCampaign} />
+  }
+
+  // Level select screen
+  if (screen === 'levelSelect') {
+    return (
+      <LevelSelectScreen
+        onSelectLevel={handleSelectLevel}
+        onBack={handleBackToMenu}
+      />
+    )
+  }
+
+  // Game screen
+  if (!level) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <p>Level not found</p>
+      </div>
+    )
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <GameScene
+        level={level}
+        onLevelComplete={handleLevelComplete}
+        onLevelFail={handleLevelFail}
+      />
 
-      <div className="ticks"></div>
+      <GameHUD level={level} onPause={pauseGame} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      {gameStatus === GameStatus.Paused && (
+        <PauseOverlay
+          onResume={handleResume}
+          onRestart={handleRestart}
+          onMenu={handleBackToMenu}
+        />
+      )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {gameStatus === GameStatus.Complete && (
+        <LevelCompleteOverlay
+          level={level}
+          onNextLevel={handleNextLevel}
+          onRestart={handleRestart}
+          onMenu={handleBackToMenu}
+        />
+      )}
+
+      {gameStatus === GameStatus.Failed && (
+        <LevelFailedOverlay
+          onRestart={handleRestart}
+          onMenu={handleBackToMenu}
+        />
+      )}
+    </div>
   )
 }
-
-export default App
